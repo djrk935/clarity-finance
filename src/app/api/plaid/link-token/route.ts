@@ -12,15 +12,22 @@ export async function POST() {
   if (!client) {
     return Response.json({ error: "Plaid not configured" }, { status: 503 });
   }
+  // Liabilities (→ debts) is generally available, so it's always best-effort.
+  // Recurring transactions (→ bills) is a GATED Plaid add-on: in production it
+  // requires approved product access, and listing a product you can't access
+  // makes /link/token/create fail (blocking linking entirely). So only request
+  // it when explicitly enabled via PLAID_ENABLE_RECURRING=true.
+  const optionalProducts = [Products.Liabilities];
+  if (process.env.PLAID_ENABLE_RECURRING === "true") {
+    optionalProducts.push(Products.RecurringTransactions);
+  }
+
   try {
     const res = await client.linkTokenCreate({
       user: { client_user_id: "clarity-user" },
       client_name: "Clarity",
       products: [Products.Transactions],
-      // Liabilities (→ debts) and recurring transactions (→ bills) are
-      // best-effort: if the bank doesn't support one, linking still succeeds
-      // and we simply skip that data set.
-      optional_products: [Products.Liabilities, Products.RecurringTransactions],
+      optional_products: optionalProducts,
       country_codes: [CountryCode.Us],
       language: "en",
     });
