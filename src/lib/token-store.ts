@@ -47,11 +47,20 @@ const globalForPool = globalThis as unknown as { pgPool?: Pool };
 
 function pool(): Pool {
   if (!globalForPool.pgPool) {
-    const url = process.env.DATABASE_URL ?? "";
+    const raw = process.env.DATABASE_URL ?? "";
+    // pg v8 treats `sslmode=require` as `verify-full`, which rejects DO managed
+    // Postgres' CA chain (SELF_SIGNED_CERT_IN_CHAIN) and overrides the ssl
+    // option below. Strip sslmode so our explicit ssl config is authoritative.
+    let connectionString = raw;
+    try {
+      const u = new URL(raw);
+      u.searchParams.delete("sslmode");
+      connectionString = u.toString();
+    } catch {
+      /* not a parseable URL — use as-is */
+    }
     globalForPool.pgPool = new Pool({
-      connectionString: url,
-      // Managed Postgres (DigitalOcean) presents a CA cert Node doesn't trust
-      // by default — use SSL but skip chain verification.
+      connectionString,
       ssl: { rejectUnauthorized: false },
     });
   }
