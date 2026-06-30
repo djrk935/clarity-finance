@@ -50,9 +50,9 @@ function pool(): Pool {
     const url = process.env.DATABASE_URL ?? "";
     globalForPool.pgPool = new Pool({
       connectionString: url,
-      ssl: url.includes("sslmode=require")
-        ? { rejectUnauthorized: false }
-        : undefined,
+      // Managed Postgres (DigitalOcean) presents a CA cert Node doesn't trust
+      // by default — use SSL but skip chain verification.
+      ssl: { rejectUnauthorized: false },
     });
   }
   return globalForPool.pgPool;
