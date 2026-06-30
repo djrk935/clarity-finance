@@ -9,6 +9,8 @@ import { InsightsPanel } from "@/components/dashboard/InsightsPanel";
 import { AccountsPanel } from "@/components/dashboard/AccountsPanel";
 import { AdvisorChat } from "@/components/dashboard/AdvisorChat";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   if (!(await isAuthed())) return null;
   const d = await getDashboardData();

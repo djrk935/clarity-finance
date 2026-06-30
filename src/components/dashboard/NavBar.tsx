@@ -6,6 +6,8 @@ import { SyncButton } from "./SyncButton";
 
 const NAV = [
   { href: "/", label: "Overview" },
+  { href: "/activity", label: "Activity" },
+  { href: "/reports", label: "Reports" },
   { href: "/accounts", label: "Accounts" },
   { href: "/plan", label: "Plan" },
   { href: "/advisor", label: "Advisor" },

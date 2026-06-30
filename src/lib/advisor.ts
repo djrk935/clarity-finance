@@ -20,6 +20,22 @@ export function buildSystemPrompt(s: FinancialSnapshot): string {
         s.utilization.balance,
       )} of ${formatCurrency(s.utilization.limit)})`
     : "no credit cards on file";
+  const categories =
+    s.topCategories.length > 0
+      ? s.topCategories
+          .map((c) => `${c.category} ${formatCurrency(c.total)}`)
+          .join(", ")
+      : "none yet";
+  const merchants =
+    s.topMerchants.length > 0
+      ? s.topMerchants
+          .map((m) => `${m.merchant} ${formatCurrency(m.total)}`)
+          .join(", ")
+      : "none yet";
+  const runway =
+    s.forecast.runwayDays != null
+      ? `${s.forecast.runwayDays} days at the recent burn rate`
+      : "unknown";
   return [
     "You are Clarity, a calm, encouraging financial advisor inside a money-rescue app.",
     "Be concise (2–4 sentences), specific, and reference the user's real numbers.",
@@ -30,11 +46,16 @@ export function buildSystemPrompt(s: FinancialSnapshot): string {
     `Spendable cash (checking + cash): ${formatCurrency(s.spendable)}`,
     `Total liquidity: ${formatCurrency(s.totalLiquidity)}`,
     `Safety buffer kept aside: ${formatCurrency(s.buffer)}`,
+    `Income this month: ${formatCurrency(s.incomeThisMonth)}`,
+    `Spent this month: ${formatCurrency(s.spentThisMonth)}`,
+    `Net this month (in − out): ${formatCurrency(s.savedThisMonth)}`,
+    `Top spending categories this month: ${categories}`,
+    `Biggest merchants this month: ${merchants}`,
+    `Avg daily spend (14d): ${formatCurrency(s.forecast.avgDailySpend)}; cash runway: ${runway}`,
     `Upcoming bills (next 14 days): ${formatCurrency(s.upcomingBillsTotal)} across ${s.upcomingBillsCount} bills`,
     s.nextBill
       ? `Next bill: ${s.nextBill.name} ${formatCurrency(s.nextBill.amount)}`
       : "Next bill: none",
-    `Saved this month: ${formatCurrency(s.savedThisMonth)}`,
     `Debt rescue: ${formatCurrency(s.rescue.remaining)} remaining of ${formatCurrency(
       s.rescue.totalDebt,
     )} (${s.rescue.pct}% paid), debt-free target ${s.rescue.payoffDate}, ${s.rescue.monthsAhead} months ahead`,
@@ -48,6 +69,9 @@ type Intent =
   | "debt"
   | "bills"
   | "credit"
+  | "spending"
+  | "income"
+  | "merchant"
   | "summary"
   | "greeting"
   | "fallback";
@@ -55,10 +79,14 @@ type Intent =
 function classify(message: string): Intent {
   const m = message.toLowerCase();
   if (/\b(hi|hey|hello|yo|sup)\b/.test(m) && m.trim().length < 16) return "greeting";
+  if (/(where.*(money|cash).*(go|going)|what.*spend|spending|categor|biggest (spend|expense)|where.*went)/.test(m))
+    return "spending";
+  if (/(merchant|store|who.*paid|where.*shop|top (merchant|store|place))/.test(m)) return "merchant";
+  if (/(income|earn|paid|paycheck|salary|make|coming in|money in)/.test(m)) return "income";
   if (/(save|saving|savings|move|transfer|put away|stash)/.test(m)) return "savings";
   if (/(safe to spend|safe spend|spend|afford|discretionary)/.test(m)) return "safe";
   if (/(debt|payoff|pay off|loan|owe|free)/.test(m)) return "debt";
-  if (/(bill|due|owe soon|upcoming|rent|payment)/.test(m)) return "bills";
+  if (/(bill|due|owe soon|upcoming|rent|payment|subscription)/.test(m)) return "bills";
   if (/(credit|utiliz|score|card|sapphire)/.test(m)) return "credit";
   if (/(summary|overview|how am i|doing|status|snapshot|health)/.test(m)) return "summary";
   return "fallback";
@@ -127,6 +155,46 @@ export function ruleBasedReply(
         pay,
         false,
       )} before the statement closes gets you under 30%, which helps your score.`;
+    }
+
+    case "spending": {
+      if (s.topCategories.length === 0)
+        return `I don't see any spending recorded this month yet. Once transactions come through, I'll break down exactly where your money is going.`;
+      const top = s.topCategories
+        .slice(0, 3)
+        .map((c) => `${c.category} (${formatCurrency(c.total)})`)
+        .join(", ");
+      return `You've spent ${formatCurrency(
+        s.spentThisMonth,
+      )} this month. Your biggest categories are ${top}. ${s.topCategories[0].category} is leading — worth a look if you want to trim.`;
+    }
+
+    case "merchant": {
+      if (s.topMerchants.length === 0)
+        return `No merchant activity recorded this month yet.`;
+      const m0 = s.topMerchants[0];
+      const rest = s.topMerchants
+        .slice(1, 3)
+        .map((m) => `${m.merchant} (${formatCurrency(m.total)})`)
+        .join(", ");
+      return `Your biggest merchant this month is ${m0.merchant} at ${formatCurrency(
+        m0.total,
+      )} across ${m0.count} ${m0.count === 1 ? "charge" : "charges"}${
+        rest ? `, followed by ${rest}` : ""
+      }.`;
+    }
+
+    case "income": {
+      const net = s.savedThisMonth;
+      return `You've taken in ${formatCurrency(
+        s.incomeThisMonth,
+      )} this month and spent ${formatCurrency(s.spentThisMonth)}, leaving a net of ${
+        net >= 0 ? "+" : ""
+      }${formatCurrency(net)}. ${
+        net >= 0
+          ? "You're cash-flow positive — nice."
+          : "You're spending more than you're bringing in this month — worth easing back."
+      }`;
     }
 
     case "summary":

@@ -14,12 +14,13 @@ export async function POST() {
   }
   try {
     const res = await client.linkTokenCreate({
-      user: { client_user_id: "clarity-demo-user" },
+      user: { client_user_id: "clarity-user" },
       client_name: "Clarity",
       products: [Products.Transactions],
-      // Liabilities is best-effort: if the bank doesn't support it, linking
-      // still succeeds (we just won't get debt details).
-      optional_products: [Products.Liabilities],
+      // Liabilities (→ debts) and recurring transactions (→ bills) are
+      // best-effort: if the bank doesn't support one, linking still succeeds
+      // and we simply skip that data set.
+      optional_products: [Products.Liabilities, Products.RecurringTransactions],
       country_codes: [CountryCode.Us],
       language: "en",
     });

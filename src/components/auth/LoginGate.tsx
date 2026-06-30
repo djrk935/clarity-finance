@@ -6,14 +6,14 @@ import { useRouter } from "next/navigation";
 export function LoginGate() {
   const router = useRouter();
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(false);
+  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!password || busy) return;
     setBusy(true);
-    setError(false);
+    setError("");
     try {
       const res = await fetch("/api/login", {
         method: "POST",
@@ -23,11 +23,16 @@ export function LoginGate() {
       if (res.ok) {
         router.refresh();
       } else {
-        setError(true);
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(
+          res.status === 429
+            ? (data.error ?? "Too many attempts. Try again later.")
+            : "Incorrect password — try again.",
+        );
         setBusy(false);
       }
     } catch {
-      setError(true);
+      setError("Network hiccup — try again in a moment.");
       setBusy(false);
     }
   }
@@ -63,7 +68,7 @@ export function LoginGate() {
         </div>
         {error && (
           <p style={{ color: "#ff9aa9", fontSize: 13, marginTop: 10 }}>
-            Incorrect password — try again.
+            {error}
           </p>
         )}
         <button

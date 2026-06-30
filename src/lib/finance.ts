@@ -8,6 +8,11 @@ import type {
   Transaction,
   SpendingTrend,
   CashflowDay,
+  CategorySpend,
+  MerchantSpend,
+  PeriodKey,
+  PeriodSummary,
+  MonthlyPoint,
 } from "./types";
 
 const DEPOSITORY: AccountTypeLite[] = ["checking", "savings", "cash"];
@@ -48,16 +53,18 @@ export function spendableBalance(accounts: Account[]): number {
 
 /* ---------- bills ---------- */
 
+/* All calendar bucketing is done in UTC. Plaid delivers date-only strings
+ * ("2026-06-01") which we store as UTC midnight, and the app deploys on a UTC
+ * server — so comparing in UTC keeps a transaction on its real calendar date
+ * (local-time bucketing would shift it to the previous day west of UTC). */
+
 function startOfDay(d: Date): Date {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 
 function addDays(d: Date, days: number): Date {
-  const x = new Date(d);
-  x.setDate(x.getDate() + days);
-  return x;
+  // UTC has no DST, so a fixed-size day shift is exact.
+  return new Date(d.getTime() + days * 86_400_000);
 }
 
 /** Bills due between today and `withinDays` from now (inclusive). */
@@ -172,7 +179,7 @@ export function categoryTrend(
   return { category, thisWeek, lastWeek, pct };
 }
 
-/** Daily outflow over the last 7 days (Mon→Sun by weekday label), derived
+/** Daily inflow + outflow over the last 7 days (by weekday label), derived
  *  from transactions. Used for the cash-flow chart. */
 export function cashflowFromTransactions(
   transactions: Transaction[],
@@ -183,22 +190,110 @@ export function cashflowFromTransactions(
   for (let i = 6; i >= 0; i--) {
     const start = startOfDay(addDays(now, -i));
     const end = addDays(start, 1);
-    const outflow = transactions
-      .filter((t) => {
-        const d = startOfDay(new Date(t.date));
-        return t.amount < 0 && d >= start && d < end;
-      })
-      .reduce((s, t) => s + Math.abs(t.amount), 0);
-    days.push({ label: labels[start.getDay()], outflow: Math.round(outflow) });
+    let outflow = 0;
+    let inflow = 0;
+    for (const t of transactions) {
+      const d = startOfDay(new Date(t.date));
+      if (d < start || d >= end) continue;
+      if (t.amount < 0) outflow += Math.abs(t.amount);
+      else inflow += t.amount;
+    }
+    days.push({
+      label: labels[start.getUTCDay()],
+      date: start.toISOString(),
+      outflow: Math.round(outflow),
+      inflow: Math.round(inflow),
+    });
   }
   return days;
+}
+
+/* ---------- spending (current calendar month) ---------- */
+
+function startOfMonth(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+}
+
+/** Days remaining in the current calendar month (including today). */
+export function daysUntilMonthEnd(now: Date = new Date()): number {
+  const lastDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
+  const diff =
+    Math.round(
+      (startOfDay(lastDay).getTime() - startOfDay(now).getTime()) / 86_400_000,
+    ) + 1;
+  return Math.max(1, diff);
+}
+
+/** Total spent so far this calendar month. Delegates so the boundary
+ *  convention (inclusive by day, UTC) is identical to the period functions. */
+export function totalSpentThisMonth(
+  transactions: Transaction[],
+  now: Date = new Date(),
+): number {
+  const { from, to } = periodRange("month", now);
+  return spendingInRange(transactions, from, to);
+}
+
+/** Outflow totals per category for the current month, biggest first. */
+export function categorySpendThisMonth(
+  transactions: Transaction[],
+  now: Date = new Date(),
+): CategorySpend[] {
+  const { from, to } = periodRange("month", now);
+  return categorySpendInRange(transactions, from, to);
+}
+
+/* ---------- forecasting / runway ---------- */
+
+/** Average daily outflow over the last `windowDays` days. */
+export function avgDailySpend(
+  transactions: Transaction[],
+  now: Date = new Date(),
+  windowDays = 14,
+): number {
+  const lo = startOfDay(addDays(now, -(windowDays - 1)));
+  const hi = startOfDay(now);
+  let total = 0;
+  for (const t of transactions) {
+    if (t.amount >= 0) continue;
+    const d = startOfDay(new Date(t.date));
+    if (d >= lo && d <= hi) total += Math.abs(t.amount);
+  }
+  return round2(total / windowDays);
+}
+
+/** How many days spendable cash lasts at the recent burn rate. null = unknown. */
+export function runwayDays(spendable: number, avgDaily: number): number | null {
+  if (avgDaily <= 0) return null;
+  return Math.max(0, Math.floor(spendable / avgDaily));
+}
+
+/** Safe-to-spend split into a per-day allowance for the rest of the period. */
+export function dailySafeToSpend(safeToSpend: number, daysLeft: number): number {
+  if (daysLeft <= 0) return round2(safeToSpend);
+  return round2(safeToSpend / daysLeft);
+}
+
+/** Months of expenses your liquidity covers. null = unknown. */
+export function monthsOfRunway(
+  liquidity: number,
+  monthlyExpenses: number,
+): number | null {
+  if (monthlyExpenses <= 0) return null;
+  return round2(liquidity / monthlyExpenses);
 }
 
 /* ---------- dates ---------- */
 
 export function addMonths(date: Date, n: number): Date {
   const d = new Date(date);
-  d.setMonth(d.getMonth() + n);
+  const day = d.getUTCDate();
+  d.setUTCDate(1); // avoid month-overflow (e.g. Jan 31 + 1 → Mar)
+  d.setUTCMonth(d.getUTCMonth() + n);
+  const lastDay = new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  d.setUTCDate(Math.min(day, lastDay));
   return d;
 }
 
@@ -206,6 +301,7 @@ export function formatMonthYear(date: Date): string {
   return new Intl.DateTimeFormat("en-US", {
     month: "long",
     year: "numeric",
+    timeZone: "UTC",
   }).format(date);
 }
 
@@ -219,6 +315,181 @@ export function avalancheOrder<T extends { apr: number }>(debts: T[]): T[] {
 export interface PayoffResult {
   months: number;
   totalInterest: number;
+}
+
+/* ---------- income & date ranges ---------- */
+
+function inDayRange(dateStr: string, lo: Date, hi: Date): boolean {
+  const d = startOfDay(new Date(dateStr));
+  return d >= lo && d <= hi;
+}
+
+/** Total money out (absolute) within [from, to], inclusive by day. */
+export function spendingInRange(
+  transactions: Transaction[],
+  from: Date,
+  to: Date,
+): number {
+  const lo = startOfDay(from);
+  const hi = startOfDay(to);
+  let total = 0;
+  for (const t of transactions) {
+    if (t.amount >= 0) continue;
+    if (inDayRange(t.date, lo, hi)) total += Math.abs(t.amount);
+  }
+  return round2(total);
+}
+
+/** Total money in within [from, to], inclusive by day. */
+export function incomeInRange(
+  transactions: Transaction[],
+  from: Date,
+  to: Date,
+): number {
+  const lo = startOfDay(from);
+  const hi = startOfDay(to);
+  let total = 0;
+  for (const t of transactions) {
+    if (t.amount <= 0) continue;
+    if (inDayRange(t.date, lo, hi)) total += t.amount;
+  }
+  return round2(total);
+}
+
+/** Money in so far this calendar month. */
+export function incomeThisMonth(
+  transactions: Transaction[],
+  now: Date = new Date(),
+): number {
+  return incomeInRange(transactions, startOfMonth(now), now);
+}
+
+/** Outflow totals per category within [from, to], biggest first. */
+export function categorySpendInRange(
+  transactions: Transaction[],
+  from: Date,
+  to: Date,
+): CategorySpend[] {
+  const lo = startOfDay(from);
+  const hi = startOfDay(to);
+  const totals = new Map<string, number>();
+  for (const t of transactions) {
+    if (t.amount >= 0) continue;
+    if (!inDayRange(t.date, lo, hi)) continue;
+    totals.set(t.category, (totals.get(t.category) ?? 0) + Math.abs(t.amount));
+  }
+  return [...totals.entries()]
+    .map(([category, total]) => ({ category, total: round2(total) }))
+    .sort((a, b) => b.total - a.total);
+}
+
+/** Biggest outflow destinations within [from, to], grouped by merchant. */
+export function topMerchants(
+  transactions: Transaction[],
+  from: Date,
+  to: Date,
+  limit = 5,
+): MerchantSpend[] {
+  const lo = startOfDay(from);
+  const hi = startOfDay(to);
+  const map = new Map<string, { total: number; count: number }>();
+  for (const t of transactions) {
+    if (t.amount >= 0) continue;
+    if (!inDayRange(t.date, lo, hi)) continue;
+    const key = t.description?.trim() || "Other";
+    const cur = map.get(key) ?? { total: 0, count: 0 };
+    cur.total += Math.abs(t.amount);
+    cur.count += 1;
+    map.set(key, cur);
+  }
+  return [...map.entries()]
+    .map(([merchant, v]) => ({ merchant, total: round2(v.total), count: v.count }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, limit);
+}
+
+/* ---------- periods / statements ---------- */
+
+/** Resolve a named period to a concrete [from, to] range + human label. */
+export function periodRange(
+  key: PeriodKey,
+  now: Date = new Date(),
+): { from: Date; to: Date; label: string } {
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  switch (key) {
+    case "week":
+      return { from: addDays(now, -6), to: now, label: "Last 7 days" };
+    case "month":
+      return { from: new Date(Date.UTC(y, m, 1)), to: now, label: "This month" };
+    case "last-month":
+      // Date.UTC normalizes a negative month index across the year boundary,
+      // and day 0 of month m = the last day of month m-1.
+      return {
+        from: new Date(Date.UTC(y, m - 1, 1)),
+        to: new Date(Date.UTC(y, m, 0)),
+        label: "Last month",
+      };
+    case "year":
+      return { from: new Date(Date.UTC(y, 0, 1)), to: now, label: "This year" };
+  }
+}
+
+/** A full statement for a named period: totals + category/merchant breakdowns. */
+export function summarizePeriod(
+  transactions: Transaction[],
+  key: PeriodKey,
+  now: Date = new Date(),
+): PeriodSummary {
+  const { from, to, label } = periodRange(key, now);
+  const lo = startOfDay(from);
+  const hi = startOfDay(to);
+  const income = incomeInRange(transactions, from, to);
+  const spending = spendingInRange(transactions, from, to);
+  const txnCount = transactions.filter((t) => inDayRange(t.date, lo, hi)).length;
+  return {
+    key,
+    label,
+    from: lo.toISOString(),
+    to: hi.toISOString(),
+    income,
+    spending,
+    net: round2(income - spending),
+    txnCount,
+    byCategory: categorySpendInRange(transactions, from, to),
+    topMerchants: topMerchants(transactions, from, to, 5),
+  };
+}
+
+/** Rolling in/out/net per calendar month, oldest → newest. */
+export function monthlyTrend(
+  transactions: Transaction[],
+  now: Date = new Date(),
+  months = 6,
+): MonthlyPoint[] {
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  // Format in UTC since `from` is the 1st at UTC midnight (a local formatter
+  // would label it as the previous month west of UTC).
+  const labelFmt = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    timeZone: "UTC",
+  });
+  const out: MonthlyPoint[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    // Build each month from a year/month index so there's no day-overflow.
+    const from = new Date(Date.UTC(y, m - i, 1));
+    const to = i === 0 ? now : new Date(Date.UTC(y, m - i + 1, 0));
+    const income = incomeInRange(transactions, from, to);
+    const spending = spendingInRange(transactions, from, to);
+    out.push({
+      label: labelFmt.format(from),
+      income,
+      spending,
+      net: round2(income - spending),
+    });
+  }
+  return out;
 }
 
 /** Month-by-month avalanche simulation: pay every minimum, then throw the

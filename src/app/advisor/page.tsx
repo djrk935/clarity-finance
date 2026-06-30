@@ -4,6 +4,8 @@ import { PageHead } from "@/components/dashboard/PageHead";
 import { AdvisorChat } from "@/components/dashboard/AdvisorChat";
 import { isAuthed } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdvisorPage() {
   if (!(await isAuthed())) return null;
   const s = await getSnapshot();

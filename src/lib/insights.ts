@@ -3,6 +3,7 @@
 
 import { formatCurrency, payToUtilizationTarget } from "./finance";
 import type {
+  CategorySpend,
   Insight,
   Metrics,
   RescuePlan,
@@ -17,11 +18,13 @@ export interface InsightInput {
   rescue: RescuePlan;
   utilization: Utilization | null;
   spendingTrend: SpendingTrend | null;
+  /** Largest spending category this month, if any. */
+  topCategory?: CategorySpend | null;
 }
 
 export function generateInsights(input: InsightInput): Insight[] {
   const out: Insight[] = [];
-  const { metrics, rescue, utilization, spendingTrend } = input;
+  const { metrics, rescue, utilization, spendingTrend, topCategory } = input;
 
   if (utilization && utilization.pct >= SAFE_UTILIZATION) {
     const pay = payToUtilizationTarget(
@@ -68,6 +71,17 @@ export function generateInsights(input: InsightInput): Insight[] {
       tone: "info",
       title: `${rescue.monthsAhead} months ahead of plan`,
       detail: `Keep this pace and you'll be debt-free by ${rescue.payoffDate}.`,
+    });
+  }
+
+  if (topCategory && topCategory.total > 0) {
+    out.push({
+      id: "top-category",
+      tone: "info",
+      title: `${topCategory.category} is your biggest spend`,
+      detail: `You've put ${formatCurrency(
+        topCategory.total,
+      )} toward ${topCategory.category} this month — your largest category so far.`,
     });
   }
 

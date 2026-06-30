@@ -5,18 +5,18 @@ import { useEffect, useRef, useState } from "react";
 type Msg = { role: "user" | "assistant"; content: string };
 
 const SEED: Msg[] = [
-  { role: "user", content: "How much can I safely move to savings this month?" },
   {
     role: "assistant",
     content:
-      "You can move about $640 to savings and still cover every upcoming bill plus your $200 buffer — that leaves roughly $600 of breathing room. Want me to schedule it?",
+      "Hi — I'm Clarity. Ask me anything about your money: what's safe to spend, where it went this month, your bills, debt payoff, or your credit card. Every answer is grounded in your real numbers.",
   },
 ];
 
 const QUICK = [
   "What's safe to spend?",
+  "Where did my money go this month?",
+  "How much did I earn vs spend?",
   "How's my debt payoff?",
-  "Should I worry about my credit card?",
 ];
 
 export function AdvisorChat({ tall = false }: { tall?: boolean }) {
@@ -81,11 +81,17 @@ export function AdvisorChat({ tall = false }: { tall?: boolean }) {
             {m.content}
           </div>
         ))}
-        {loading && (
-          <div className="bubble-a" aria-live="polite">
-            Thinking…
-          </div>
-        )}
+        {loading && <div className="bubble-a">Thinking…</div>}
+      </div>
+
+      {/* Persistent live region so assistive tech reliably announces status
+          and replies (a region mounted on demand is often missed). */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {loading
+          ? "Thinking…"
+          : msgs[msgs.length - 1]?.role === "assistant"
+            ? msgs[msgs.length - 1].content
+            : ""}
       </div>
 
       <div
