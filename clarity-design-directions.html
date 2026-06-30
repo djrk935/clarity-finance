@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Clarity — Design Directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%}
+  body{font-family:'Inter',system-ui,sans-serif;background:#0b0c0f;color:#e7e7ea;-webkit-font-smoothing:antialiased}
+  .tabular{font-variant-numeric:tabular-nums}
+
+  /* ---------- Picker bar ---------- */
+  .picker{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:14px;
+    padding:12px 18px;background:rgba(12,13,16,.92);backdrop-filter:blur(12px);
+    border-bottom:1px solid #23252b;overflow-x:auto}
+  .picker .lead{display:flex;flex-direction:column;line-height:1.2;padding-right:8px;border-right:1px solid #2a2c33;margin-right:4px;white-space:nowrap}
+  .picker .lead b{font-family:'Space Grotesk';font-size:14px;font-weight:600;letter-spacing:.02em}
+  .picker .lead span{font-size:11px;color:#7c7f88}
+  .tab{display:flex;align-items:center;gap:8px;white-space:nowrap;cursor:pointer;
+    padding:8px 13px;border-radius:9px;border:1px solid #2a2c33;background:#15171c;
+    color:#b7bac1;font-size:13px;font-weight:500;transition:all .15s}
+  .tab:hover{border-color:#3b3e47;color:#e7e7ea}
+  .tab .sw{width:13px;height:13px;border-radius:4px;flex:none}
+  .tab .n{font-size:10px;color:#6b6e77;font-weight:600}
+  .tab.active{background:#fff;color:#111;border-color:#fff}
+  .tab.active .n{color:#888}
+
+  /* ---------- Screens ---------- */
+  .screen{display:none;min-height:calc(100vh - 58px)}
+  .screen.active{display:block}
+  .muted{color:var(--muted)}
+  .grow{flex:1}
+
+  /* ===== shared component tokens (themed via vars) ===== */
+  .scr{min-height:calc(100vh - 58px);background:var(--bg);color:var(--text);font-family:var(--font)}
+  .wrap{max-width:1080px;margin:0 auto;padding:34px 30px 60px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:30px}
+  .brand{display:flex;align-items:center;gap:12px}
+  .bmark{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-weight:700;font-size:18px;flex:none}
+  .bname{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:.01em}
+  .bsub{font-size:12px;color:var(--muted)}
+  .btn{border:none;cursor:pointer;font-family:var(--font);font-weight:600;font-size:14px;
+    padding:11px 18px;border-radius:11px;display:inline-flex;align-items:center;gap:8px;transition:all .15s}
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:22px}
+  .kpi-label{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+  .kpi-val{font-size:42px;font-weight:300;line-height:1.05;margin-top:10px}
+  .kpi-val small{font-size:21px;color:var(--muted)}
+  .kpi-sub{font-size:12px;color:var(--muted);margin-top:9px}
+  .grid2{display:grid;grid-template-columns:1.7fr 1fr;gap:18px}
+  .card-title{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:flex;align-items:center;gap:8px;margin-bottom:14px}
+  .prog{height:9px;border-radius:20px;background:var(--track);overflow:hidden}
+  .prog>span{display:block;height:100%;border-radius:20px;background:var(--accent)}
+  .row{display:flex;align-items:center;justify-content:space-between}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 10px;border-radius:20px}
+  .advisor-input{display:flex;align-items:center;gap:10px;border-radius:12px;padding:11px 14px;font-size:13px}
+  .choose{margin-top:26px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .choose .pickbtn{cursor:pointer;border:none;font-weight:600;font-size:13px;padding:10px 16px;border-radius:10px;font-family:var(--font)}
+  .choose .hint{font-size:12px;color:var(--muted)}
+
+  /* ============ 1. NOCTURNE (refined cyber) ============ */
+  .t-noc{--bg:#08080b;--surface:#0e0e13;--surface2:#15151b;--border:#1f1f28;
+    --text:#ededf2;--muted:#85858f;--accent:#f43f5e;--track:#1c1c24;
+    --font:'Inter',sans-serif;--display:'Space Grotesk',sans-serif;--mono:'JetBrains Mono',monospace}
+  .t-noc .scr{background:
+    radial-gradient(900px 500px at 50% -10%, rgba(244,63,94,.16), transparent 60%),#08080b}
+  .t-noc .bmark{background:linear-gradient(135deg,#f43f5e,#9f1239);color:#fff;box-shadow:0 0 22px rgba(244,63,94,.5)}
+  .t-noc .bname{background:linear-gradient(90deg,#fff,#9aa);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .t-noc .bsub{font-family:var(--mono);font-size:11px;letter-spacing:.05em}
+  .t-noc .bsub b{color:#f43f5e}
+  .t-noc .btn{background:#f43f5e;color:#fff;box-shadow:0 0 0 1px rgba(244,63,94,.4),0 8px 24px -8px rgba(244,63,94,.6)}
+  .t-noc .card{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;overflow:hidden}
+  .t-noc .card::before{content:"";position:absolute;inset:0 0 auto 0;height:1px;background:linear-gradient(90deg,transparent,rgba(244,63,94,.7),transparent)}
+  .t-noc .kpi-label{font-family:var(--mono)}
+  .t-noc .kpi-ico{color:#f43f5e}
+  .t-noc .val-red{color:#f43f5e}
+  .t-noc .advisor-input{background:#070709;border:1px solid var(--border);color:var(--muted)}
+  .t-noc .chip.warn{background:rgba(244,63,94,.12);color:#fda4af}
+  .t-noc .chip.good{background:rgba(16,185,129,.12);color:#6ee7b7}
+  .t-noc .dot{width:8px;height:8px;border-radius:50%;background:#f43f5e;box-shadow:0 0 10px rgba(244,63,94,.9)}
+  .t-noc .acct{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px}
+  .t-noc .pickbtn{background:#f43f5e;color:#fff}
+
+  /* ============ 2. AURORA GLASS ============ */
+  .t-glass{--bg:#0a0e1f;--text:#f2f4ff;--muted:rgba(220,225,255,.6);--accent:#a78bfa;--track:rgba(255,255,255,.12);
+    --font:'Inter',sans-serif;--display:'Space Grotesk',sans-serif}
+  .t-glass .scr{background:
+    radial-gradient(680px 460px at 12% 8%, rgba(124,58,237,.42), transparent 60%),
+    radial-gradient(620px 520px at 92% 22%, rgba(6,182,212,.32), transparent 60%),
+    radial-gradient(700px 600px at 70% 100%, rgba(236,72,153,.26), transparent 60%),
+    #0a0e1f}
+  .t-glass .glass{background:rgba(255,255,255,.07);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+    border:1px solid rgba(255,255,255,.14);border-radius:20px;padding:22px}
+  .t-glass .bmark{background:linear-gradient(135deg,#a78bfa,#22d3ee);color:#0a0e1f}
+  .t-glass .btn{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(10px)}
+  .t-glass .accentgrad{background:linear-gradient(90deg,#c4b5fd,#67e8f9);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .t-glass .bento{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;grid-auto-rows:minmax(120px,auto)}
+  .t-glass .s2{grid-column:span 2}
+  .t-glass .s2r{grid-column:span 2;grid-row:span 2}
+  .t-glass .prog>span{background:linear-gradient(90deg,#a78bfa,#22d3ee)}
+  .t-glass .chip.warn{background:rgba(251,113,133,.18);color:#fecdd3}
+  .t-glass .chip.good{background:rgba(45,212,191,.18);color:#99f6e4}
+  .t-glass .advisor-input{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);color:var(--muted)}
+  .t-glass .dot{width:8px;height:8px;border-radius:50%;background:#fb7185}
+  .t-glass .pickbtn{background:linear-gradient(135deg,#a78bfa,#22d3ee);color:#0a0e1f}
+
+  /* ============ 3. CALM MINT (light fintech) ============ */
+  .t-mint{--bg:#f4f7f5;--text:#16201b;--muted:#6c7b73;--accent:#0f9d76;--track:#e3efe9;--border:#e4e9e6;
+    --font:'Inter',sans-serif;--display:'Inter',sans-serif}
+  .t-mint .scr{background:#f4f7f5}
+  .t-mint .layout{display:flex;min-height:calc(100vh - 58px)}
+  .t-mint .side{width:236px;flex:none;background:#fff;border-right:1px solid var(--border);padding:24px 16px;display:flex;flex-direction:column;gap:4px}
+  .t-mint .side .brand{margin-bottom:22px;padding:0 6px}
+  .t-mint .navi{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:500;color:#55635c;cursor:pointer}
+  .t-mint .navi.on{background:#e7f5ef;color:#0b7a5c}
+  .t-mint .navi:hover{background:#f1f6f3}
+  .t-mint .main{flex:1;padding:30px 36px 50px;min-width:0}
+  .t-mint .card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:22px;box-shadow:0 1px 2px rgba(20,40,30,.04)}
+  .t-mint .btn{background:#0f9d76;color:#fff}
+  .t-mint .bmark{background:#0f9d76;color:#fff;border-radius:12px}
+  .t-mint .bname{color:#16201b;font-weight:700}
+  .t-mint .kpi-val{font-weight:600;font-size:38px}
+  .t-mint .chip.good{background:#e3f4ec;color:#0b7a5c}
+  .t-mint .chip.warn{background:#fef3e2;color:#b45309}
+  .t-mint .advisor-input{background:#f4f7f5;border:1px solid var(--border);color:var(--muted)}
+  .t-mint .acct{display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--border);font-size:14px}
+  .t-mint .pickbtn{background:#0f9d76;color:#fff}
+
+  /* ============ 4. NEO-BRUTALIST ============ */
+  .t-brut{--bg:#f5f0e4;--text:#111;--muted:#5a554a;--accent:#2563eb;--track:#e7e1d2;--border:#111;
+    --font:'Space Grotesk',sans-serif;--display:'Space Grotesk',sans-serif}
+  .t-brut .scr{background:#f5f0e4}
+  .t-brut .card{background:#fff;border:3px solid #111;border-radius:6px;padding:22px;box-shadow:6px 6px 0 #111}
+  .t-brut .bmark{background:#111;color:#fde047;border-radius:6px}
+  .t-brut .bname{color:#111;text-transform:uppercase;font-weight:700;letter-spacing:0}
+  .t-brut .bsub{color:#5a554a;font-weight:600}
+  .t-brut .btn{background:#fde047;color:#111;border:3px solid #111;border-radius:6px;box-shadow:4px 4px 0 #111;font-weight:700;text-transform:uppercase;font-size:13px}
+  .t-brut .kpi-label{color:#111;font-weight:700}
+  .t-brut .kpi-val{font-weight:700}
+  .t-brut .card-title{color:#111;font-weight:700}
+  .t-brut .chip{border:2px solid #111;border-radius:6px}
+  .t-brut .chip.good{background:#bbf7d0;color:#14532d}
+  .t-brut .chip.warn{background:#fecaca;color:#7f1d1d}
+  .t-brut .prog{background:#e7e1d2;border:2px solid #111;height:18px;border-radius:4px}
+  .t-brut .prog>span{background:#2563eb;border-radius:0}
+  .t-brut .advisor-input{background:#f5f0e4;border:3px solid #111;border-radius:6px;color:#5a554a;font-weight:600}
+  .t-brut .pickbtn{background:#2563eb;color:#fff;border:3px solid #111;box-shadow:4px 4px 0 #111}
+  .t-brut .acct{display:flex;justify-content:space-between;padding:10px 0;border-bottom:2px solid #111;font-size:14px;font-weight:600}
+
+  /* ============ 5. EDITORIAL SERIF ============ */
+  .t-edit{--bg:#faf6ef;--text:#2b2620;--muted:#8a7d6c;--accent:#c2683f;--track:#ece3d5;--border:#e8ddcc;
+    --font:'Newsreader',Georgia,serif;--display:'Fraunces',Georgia,serif}
+  .t-edit .scr{background:#faf6ef}
+  .t-edit .wrap{max-width:740px}
+  .t-edit .bname{font-family:'Fraunces';font-weight:600}
+  .t-edit .bmark{background:#c2683f;color:#fff;border-radius:50%;font-family:'Fraunces'}
+  .t-edit .btn{background:transparent;color:#9c4a25;border:1px solid #d9a98e;font-family:'Newsreader';font-size:15px}
+  .t-edit .lead-h{font-family:'Fraunces';font-size:44px;font-weight:600;line-height:1.1;letter-spacing:-.01em;margin:16px 0 8px}
+  .t-edit .intro{font-size:18px;color:#5a5044;line-height:1.6;max-width:560px}
+  .t-edit .statrow{display:flex;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin:30px 0}
+  .t-edit .stat{flex:1;padding:20px 22px;border-right:1px solid var(--border)}
+  .t-edit .stat:last-child{border:none}
+  .t-edit .stat .l{font-size:14px;color:var(--muted);font-style:italic}
+  .t-edit .stat .v{font-family:'Fraunces';font-size:32px;font-weight:500;margin-top:6px}
+  .t-edit .sec{margin:26px 0}
+  .t-edit .sec h3{font-family:'Fraunces';font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:var(--accent);margin-bottom:13px}
+  .t-edit .quote{font-family:'Fraunces';font-size:23px;line-height:1.4;border-left:3px solid #c2683f;padding-left:20px;color:#3a342b}
+  .t-edit .prog{background:#ece3d5;height:7px}
+  .t-edit .prog>span{background:#c2683f}
+  .t-edit .acct{display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--border);font-size:16px}
+  .t-edit .pickbtn{background:#c2683f;color:#fff;font-family:'Newsreader';font-size:15px}
+
+  /* ============ 6. SLATE PRO (dense) ============ */
+  .t-slate{--bg:#0f172a;--text:#e2e8f0;--muted:#94a3b8;--accent:#38bdf8;--track:#0f172a;--border:#293548;
+    --font:'Inter',sans-serif;--display:'Inter',sans-serif;--mono:'JetBrains Mono',monospace}
+  .t-slate .scr{background:#0f172a}
+  .t-slate .layout{display:flex;min-height:calc(100vh - 58px)}
+  .t-slate .side{width:62px;flex:none;background:#0b1220;border-right:1px solid var(--border);padding:16px 0;display:flex;flex-direction:column;align-items:center;gap:6px}
+  .t-slate .sideico{width:40px;height:40px;border-radius:9px;display:grid;place-items:center;color:#64748b;font-size:17px;cursor:pointer}
+  .t-slate .sideico.on{background:#16233b;color:#38bdf8}
+  .t-slate .main{flex:1;padding:22px 26px 40px;min-width:0}
+  .t-slate .card{background:#1a2436;border:1px solid var(--border);border-radius:10px;padding:16px}
+  .t-slate .btn{background:#38bdf8;color:#06283b;font-size:13px;padding:8px 14px}
+  .t-slate .bname{font-weight:700;font-size:18px}
+  .t-slate .bmark{background:#38bdf8;color:#06283b;width:32px;height:32px;border-radius:8px;font-size:15px}
+  .t-slate .kpi-val{font-family:var(--mono);font-weight:500;font-size:25px;margin-top:7px}
+  .t-slate .kpi-label{font-size:11px}
+  .t-slate .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+  .t-slate .grid-main{display:grid;grid-template-columns:1.4fr 1fr;gap:14px}
+  .t-slate .chip.good{background:rgba(56,189,248,.14);color:#7dd3fc}
+  .t-slate .chip.warn{background:rgba(248,113,113,.14);color:#fca5a5}
+  .t-slate .bars{display:flex;align-items:flex-end;gap:8px;height:96px;margin-top:8px}
+  .t-slate .bars i{flex:1;background:#38bdf8;border-radius:3px 3px 0 0;opacity:.55}
+  .t-slate .bars i.hot{opacity:1}
+  .t-slate .tbl{width:100%;font-size:13px;border-collapse:collapse}
+  .t-slate .tbl td{padding:8px 0;border-bottom:1px solid var(--border)}
+  .t-slate .tbl tr:last-child td{border:none}
+  .t-slate .tbl td:last-child{text-align:right;font-family:var(--mono)}
+  .t-slate .advisor-input{background:#0f172a;border:1px solid var(--border);color:var(--muted)}
+  .t-slate .prog{background:#0f172a;border:1px solid var(--border)}
+  .t-slate .prog>span{background:#38bdf8}
+  .t-slate .pickbtn{background:#38bdf8;color:#06283b}
+  .t-slate .card-title{font-size:11px}
+  .t-slate .alert{display:flex;gap:9px;font-size:13px;padding:9px 0;border-bottom:1px solid var(--border)}
+
+  /* ============ 7. SUNSET SOFT ============ */
+  .t-sun{--bg:#fff8f4;--text:#241a22;--muted:#8a7480;--accent:#fb7185;--track:#f4e6ec;--border:#f1e4ea;
+    --font:'Plus Jakarta Sans',sans-serif;--display:'Plus Jakarta Sans',sans-serif}
+  .t-sun .scr{background:
+    radial-gradient(520px 360px at 6% 0%, rgba(251,113,133,.18), transparent 60%),
+    radial-gradient(520px 400px at 100% 6%, rgba(139,92,246,.15), transparent 60%),#fff8f4}
+  .t-sun .wrap{max-width:600px}
+  .t-sun .card{background:#fff;border:1px solid var(--border);border-radius:22px;padding:20px;box-shadow:0 6px 24px -14px rgba(150,60,90,.25)}
+  .t-sun .bmark{background:linear-gradient(135deg,#fb7185,#8b5cf6);color:#fff;border-radius:14px}
+  .t-sun .bname{font-weight:700}
+  .t-sun .btn{background:#fff;color:#be345a;border:1px solid var(--border);border-radius:14px;box-shadow:0 4px 14px -8px rgba(150,60,90,.3)}
+  .t-sun .hero{background:linear-gradient(135deg,#fb7185,#8b5cf6);color:#fff;border-radius:26px;padding:24px;box-shadow:0 16px 38px -16px rgba(180,60,110,.55)}
+  .t-sun .pills{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0}
+  .t-sun .pill{background:#fff;border:1px solid var(--border);border-radius:18px;padding:15px 17px;box-shadow:0 6px 24px -16px rgba(150,60,90,.25)}
+  .t-sun .ring{width:100px;height:100px;border-radius:50%;flex:none;display:grid;place-items:center;background:conic-gradient(#fb7185 0 33%, #f4e6ec 33% 100%)}
+  .t-sun .ring i{width:76px;height:76px;border-radius:50%;background:#fff;display:grid;place-items:center;font-weight:700;font-style:normal;font-size:20px}
+  .t-sun .chip.good{background:#fde7ec;color:#be345a}
+  .t-sun .advisor-input{background:#fff5f8;border:1px solid var(--border);color:var(--muted);border-radius:14px}
+  .t-sun .prog{background:#f4e6ec}
+  .t-sun .prog>span{background:linear-gradient(90deg,#fb7185,#8b5cf6)}
+  .t-sun .pickbtn{background:linear-gradient(135deg,#fb7185,#8b5cf6);color:#fff}
+
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);opacity:0;
+    background:#fff;color:#111;font-size:13px;font-weight:600;padding:11px 18px;border-radius:11px;
+    box-shadow:0 12px 40px rgba(0,0,0,.4);transition:all .25s;z-index:80;pointer-events:none}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  @media(max-width:720px){.kpis{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}.t-glass .bento{grid-template-columns:1fr}.t-glass .s2,.t-glass .s2r{grid-column:auto;grid-row:auto}}
+</style>
+</head>
+<body>
+
+<nav class="picker" id="picker">
+  <div class="lead"><b>Clarity</b><span>7 design directions · pick one</span></div>
+  <div class="tab active" data-go="s1"><span class="sw" style="background:#f43f5e"></span><span class="n">01</span>Nocturne</div>
+  <div class="tab" data-go="s2"><span class="sw" style="background:linear-gradient(135deg,#a78bfa,#22d3ee)"></span><span class="n">02</span>Aurora Glass</div>
+  <div class="tab" data-go="s3"><span class="sw" style="background:#0f9d76"></span><span class="n">03</span>Calm Mint</div>
+  <div class="tab" data-go="s4"><span class="sw" style="background:#fde047;border:1px solid #111"></span><span class="n">04</span>Brutalist</div>
+  <div class="tab" data-go="s5"><span class="sw" style="background:#c2683f"></span><span class="n">05</span>Editorial</div>
+  <div class="tab" data-go="s6"><span class="sw" style="background:#38bdf8"></span><span class="n">06</span>Slate Pro</div>
+  <div class="tab" data-go="s7"><span class="sw" style="background:linear-gradient(135deg,#fb7185,#8b5cf6)"></span><span class="n">07</span>Sunset Soft</div>
+</nav>
+
+<main id="stage">
+
+<!-- ============================ 1. NOCTURNE ============================ -->
+<section class="screen active t-noc" id="s1"><div class="scr"><div class="wrap">
+  <div class="topbar">
+    <div class="brand">
+      <div class="bmark">C</div>
+      <div><div class="bname">CLARITY</div><div class="bsub">SYSTEM STATUS: <b>SECURE &amp; ACTIVE</b></div></div>
+    </div>
+    <button class="btn">⟳ Sync data</button>
+  </div>
+  <div class="kpis">
+    <div class="card"><div class="kpi-label">Safe to spend</div><div class="kpi-val tabular">$1,240<small>.50</small></div><div class="kpi-sub">Includes $200 structural buffer</div></div>
+    <div class="card"><div class="kpi-label">Total liquidity</div><div class="kpi-val tabular">$8,450<small>.00</small></div><div class="kpi-sub">Across 3 depository accounts</div></div>
+    <div class="card"><div class="kpi-label">Upcoming bills</div><div class="kpi-val tabular val-red">$420<small>.00</small></div><div class="kpi-sub">Within the next 14 days</div></div>
+  </div>
+  <div class="grid2">
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div class="card">
+        <div class="card-title"><span class="kpi-ico">◈</span> AI financial advisor</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="align-self:flex-end;max-width:78%;background:#f43f5e;color:#fff;padding:11px 14px;border-radius:13px 13px 4px 13px;font-size:14px">How much can I safely move to savings this month?</div>
+          <div style="align-self:flex-start;max-width:82%;background:#15151b;border:1px solid var(--border);padding:11px 14px;border-radius:13px 13px 13px 4px;font-size:14px;line-height:1.5">You can move <b style="color:#6ee7b7">$640</b> and still cover every bill plus your $200 buffer. Want me to schedule it for the 28th?</div>
+        </div>
+        <div class="advisor-input" style="margin-top:14px"><span class="grow">Ask about your money…</span><span style="color:#f43f5e">➤</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="kpi-ico">▤</span> Rescue plan · debt payoff</div>
+        <div class="row" style="margin-bottom:10px"><span style="font-size:14px">$2,100 paid of $6,400</span><span class="chip good">33% · on track</span></div>
+        <div class="prog"><span style="width:33%"></span></div>
+        <div class="kpi-sub">Projected debt-free: April 2027 · 2 months ahead of plan</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div class="card">
+        <div class="card-title"><span class="kpi-ico">⚠</span> Proactive insights</div>
+        <div style="display:flex;gap:12px;background:rgba(244,63,94,.08);border:1px solid rgba(244,63,94,.3);border-radius:11px;padding:14px;margin-bottom:12px">
+          <div class="dot" style="margin-top:5px"></div>
+          <div><div style="font-weight:600;margin-bottom:3px">High utilization</div><div style="font-size:13px;color:var(--muted);line-height:1.5">Chase Sapphire is at 34%. Pay $400 before statement close to protect your score.</div></div>
+        </div>
+        <div style="display:flex;gap:12px;background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.25);border-radius:11px;padding:14px">
+          <div class="dot" style="background:#34d399;box-shadow:0 0 10px rgba(52,211,153,.8);margin-top:5px"></div>
+          <div><div style="font-weight:600;margin-bottom:3px">Spending down 12%</div><div style="font-size:13px;color:var(--muted);line-height:1.5">Dining is lower than last week. Nice work.</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="kpi-ico">≡</span> Accounts</div>
+        <div class="acct"><span>Checking</span><span class="tabular">$2,150.00</span></div>
+        <div class="acct"><span>Savings</span><span class="tabular">$5,800.00</span></div>
+        <div class="acct" style="border:none"><span>Cash</span><span class="tabular">$500.00</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="choose"><button class="pickbtn" data-name="Nocturne">✓ Build with Nocturne</button><span class="hint">Dark, focused, crimson-accent “command center” feel — an evolution of your current theme.</span></div>
+</div></div></section>
+
+<!-- ============================ 2. AURORA GLASS ============================ -->
+<section class="screen t-glass" id="s2"><div class="scr"><div class="wrap">
+  <div class="topbar">
+    <div class="brand"><div class="bmark">C</div><div><div class="bname">Clarity</div><div class="bsub">Good evening, Dayan</div></div></div>
+    <button class="btn">⟳ Sync data</button>
+  </div>
+  <div class="bento">
+    <div class="glass s2r">
+      <div class="kpi-label">Safe to spend</div>
+      <div class="kpi-val tabular accentgrad" style="font-size:56px;margin-top:14px">$1,240<small style="-webkit-text-fill-color:var(--muted)">.50</small></div>
+      <div class="kpi-sub" style="margin-bottom:18px">Includes $200 structural buffer · resets in 6 days</div>
+      <div class="prog"><span style="width:62%"></span></div>
+      <div class="kpi-sub">62% of this period’s safe budget remaining</div>
+    </div>
+    <div class="glass s2"><div class="kpi-label">Total liquidity</div><div class="kpi-val tabular" style="font-size:34px;margin-top:8px">$8,450.00</div><div class="kpi-sub">3 accounts</div></div>
+    <div class="glass"><div class="kpi-label">Bills · 14d</div><div class="kpi-val tabular" style="font-size:30px;margin-top:8px;color:#fda4af">$420</div></div>
+    <div class="glass"><div class="kpi-label">Saved</div><div class="kpi-val tabular" style="font-size:30px;margin-top:8px;color:#99f6e4">+$640</div></div>
+    <div class="glass s2">
+      <div class="card-title" style="color:rgba(220,225,255,.7)">◈ AI advisor</div>
+      <div style="font-size:14px;line-height:1.55">“You can move <b class="accentgrad">$640</b> to savings and still cover everything.”</div>
+      <div class="advisor-input" style="margin-top:14px"><span class="grow">Ask anything…</span><span>➤</span></div>
+    </div>
+    <div class="glass s2">
+      <div class="card-title" style="color:rgba(220,225,255,.7)">▤ Rescue plan</div>
+      <div class="row" style="margin-bottom:10px"><span style="font-size:13px">$2,100 / $6,400</span><span class="chip good">33%</span></div>
+      <div class="prog"><span style="width:33%"></span></div>
+      <div class="kpi-sub">Debt-free by Apr 2027</div>
+    </div>
+    <div class="glass s2r">
+      <div class="card-title" style="color:rgba(220,225,255,.7)">⚠ Insights</div>
+      <div style="display:flex;gap:10px;margin-bottom:14px"><div class="dot" style="margin-top:5px"></div><div><div style="font-weight:600">High utilization</div><div class="kpi-sub">Chase Sapphire 34% — pay $400 before close.</div></div></div>
+      <div style="display:flex;gap:10px"><div class="dot" style="background:#5eead4;margin-top:5px"></div><div><div style="font-weight:600">Dining down 12%</div><div class="kpi-sub">Under budget this week.</div></div></div>
+    </div>
+    <div class="glass s2"><div class="card-title" style="color:rgba(220,225,255,.7)">≡ Accounts</div>
+      <div class="row" style="font-size:13px;padding:6px 0"><span>Checking</span><span class="tabular">$2,150</span></div>
+      <div class="row" style="font-size:13px;padding:6px 0"><span>Savings</span><span class="tabular">$5,800</span></div>
+      <div class="row" style="font-size:13px;padding:6px 0"><span>Cash</span><span class="tabular">$500</span></div>
+    </div>
+  </div>
+  <div class="choose"><button class="pickbtn" data-name="Aurora Glass">✓ Build with Aurora Glass</button><span class="hint">Frosted-glass bento tiles over an aurora gradient — premium and modern.</span></div>
+</div></div></section>
+
+<!-- ============================ 3. CALM MINT ============================ -->
+<section class="screen t-mint" id="s3"><div class="scr"><div class="layout">
+  <aside class="side">
+    <div class="brand"><div class="bmark">C</div><div class="bname">Clarity</div></div>
+    <div class="navi on">◉ Dashboard</div>
+    <div class="navi">≡ Accounts</div>
+    <div class="navi">▤ Rescue plan</div>
+    <div class="navi">◈ Advisor</div>
+    <div class="navi">⚙ Settings</div>
+    <div style="margin-top:auto;font-size:12px;color:var(--muted);padding:10px 12px">Synced 2 min ago</div>
+  </aside>
+  <div class="main">
+    <div class="topbar">
+      <div><div style="font-size:22px;font-weight:700">Good evening, Dayan</div><div class="bsub" style="font-size:13px;color:var(--muted)">Here’s where things stand today</div></div>
+      <button class="btn">⟳ Sync data</button>
+    </div>
+    <div class="kpis">
+      <div class="card"><div class="kpi-label">Safe to spend</div><div class="kpi-val tabular">$1,240<small>.50</small></div><div class="kpi-sub">$200 buffer kept aside</div></div>
+      <div class="card"><div class="kpi-label">Total liquidity</div><div class="kpi-val tabular">$8,450<small>.00</small></div><div class="kpi-sub">3 accounts</div></div>
+      <div class="card"><div class="kpi-label">Upcoming bills</div><div class="kpi-val tabular" style="color:#b45309">$420<small>.00</small></div><div class="kpi-sub">Next 14 days</div></div>
+    </div>
+    <div class="grid2">
+      <div style="display:flex;flex-direction:column;gap:18px">
+        <div class="card">
+          <div class="card-title">◈ Your advisor</div>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div style="align-self:flex-end;max-width:78%;background:#0f9d76;color:#fff;padding:11px 14px;border-radius:14px 14px 4px 14px;font-size:14px">How much can I safely move to savings?</div>
+            <div style="align-self:flex-start;max-width:82%;background:#f4f7f5;border:1px solid var(--border);padding:11px 14px;border-radius:14px 14px 14px 4px;font-size:14px;line-height:1.5">You can move <b style="color:#0b7a5c">$640</b> and still cover every bill plus your buffer.</div>
+          </div>
+          <div class="advisor-input" style="margin-top:14px"><span class="grow">Ask about your money…</span><span style="color:#0f9d76">➤</span></div>
+        </div>
+        <div class="card">
+          <div class="card-title">▤ Rescue plan · debt payoff</div>
+          <div class="row" style="margin-bottom:10px"><span style="font-size:14px">$2,100 paid of $6,400</span><span class="chip good">33% · on track</span></div>
+          <div class="prog"><span style="width:33%"></span></div>
+          <div class="kpi-sub" style="margin-top:10px">Projected debt-free: April 2027 — 2 months ahead</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:18px">
+        <div class="card">
+          <div class="card-title">⚠ Insights</div>
+          <div style="background:#fef6ea;border:1px solid #f5e2c2;border-radius:11px;padding:13px;margin-bottom:11px"><div style="font-weight:600;font-size:14px;margin-bottom:3px">High utilization</div><div style="font-size:13px;color:var(--muted);line-height:1.5">Chase Sapphire 34% — pay $400 before close.</div></div>
+          <div style="background:#eaf6ef;border:1px solid #cfeadd;border-radius:11px;padding:13px"><div style="font-weight:600;font-size:14px;margin-bottom:3px">Dining down 12%</div><div style="font-size:13px;color:var(--muted);line-height:1.5">Under budget this week — nice.</div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">≡ Accounts</div>
+          <div class="acct"><span>Checking</span><span class="tabular">$2,150.00</span></div>
+          <div class="acct"><span>Savings</span><span class="tabular">$5,800.00</span></div>
+          <div class="acct" style="border:none"><span>Cash</span><span class="tabular">$500.00</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="choose"><button class="pickbtn" data-name="Calm Mint">✓ Build with Calm Mint</button><span class="hint">Light, calm, sidebar-driven — Mercury/Linear feel, designed to lower financial stress.</span></div>
+  </div>
+</div></div></section>
+
+<!-- ============================ 4. NEO-BRUTALIST ============================ -->
+<section class="screen t-brut" id="s4"><div class="scr"><div class="wrap">
+  <div class="topbar">
+    <div class="brand"><div class="bmark">C</div><div><div class="bname">CLARITY</div><div class="bsub">YOUR MONEY, NO NONSENSE</div></div></div>
+    <button class="btn">⟳ SYNC DATA</button>
+  </div>
+  <div class="kpis">
+    <div class="card" style="background:#fde047"><div class="kpi-label">SAFE TO SPEND</div><div class="kpi-val tabular">$1,240<small style="color:#5a554a">.50</small></div><div class="kpi-sub" style="color:#5a554a;font-weight:600">$200 BUFFER KEPT</div></div>
+    <div class="card"><div class="kpi-label">TOTAL LIQUIDITY</div><div class="kpi-val tabular">$8,450<small style="color:#5a554a">.00</small></div><div class="kpi-sub" style="color:#5a554a;font-weight:600">3 ACCOUNTS</div></div>
+    <div class="card" style="background:#2563eb;color:#fff"><div class="kpi-label" style="color:#fff">UPCOMING BILLS</div><div class="kpi-val tabular">$420<small style="color:#cdddff">.00</small></div><div class="kpi-sub" style="color:#cdddff;font-weight:600">NEXT 14 DAYS</div></div>
+  </div>
+  <div class="grid2">
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div class="card">
+        <div class="card-title">◈ AI ADVISOR</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="align-self:flex-end;max-width:80%;background:#111;color:#fff;padding:11px 14px;border-radius:6px;font-size:14px;font-weight:600">HOW MUCH CAN I MOVE TO SAVINGS?</div>
+          <div style="align-self:flex-start;max-width:84%;background:#fde047;border:3px solid #111;padding:11px 14px;border-radius:6px;font-size:14px;font-weight:600;box-shadow:3px 3px 0 #111">YOU CAN MOVE $640 AND STILL COVER EVERY BILL + BUFFER.</div>
+        </div>
+        <div class="advisor-input" style="margin-top:16px"><span class="grow">ASK ANYTHING…</span><span>➤</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title">▤ RESCUE PLAN · DEBT PAYOFF</div>
+        <div class="row" style="margin-bottom:12px"><span style="font-size:15px;font-weight:700">$2,100 / $6,400</span><span class="chip good">33% ON TRACK</span></div>
+        <div class="prog"><span style="width:33%"></span></div>
+        <div class="kpi-sub" style="margin-top:12px;font-weight:600">DEBT-FREE: APRIL 2027</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div class="card">
+        <div class="card-title">⚠ INSIGHTS</div>
+        <div style="background:#fecaca;border:3px solid #111;border-radius:6px;padding:13px;margin-bottom:12px;box-shadow:3px 3px 0 #111"><div style="font-weight:700;margin-bottom:3px">HIGH UTILIZATION</div><div style="font-size:13px;font-weight:600;line-height:1.45">CHASE SAPPHIRE 34% — PAY $400 BEFORE CLOSE.</div></div>
+        <div style="background:#bbf7d0;border:3px solid #111;border-radius:6px;padding:13px;box-shadow:3px 3px 0 #111"><div style="font-weight:700;margin-bottom:3px">DINING DOWN 12%</div><div style="font-size:13px;font-weight:600;line-height:1.45">UNDER BUDGET THIS WEEK.</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">≡ ACCOUNTS</div>
+        <div class="acct"><span>CHECKING</span><span class="tabular">$2,150.00</span></div>
+        <div class="acct"><span>SAVINGS</span><span class="tabular">$5,800.00</span></div>
+        <div class="acct" style="border:none"><span>CASH</span><span class="tabular">$500.00</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="choose"><button class="pickbtn" data-name="Neo-Brutalist">✓ Build with Brutalist</button><span class="hint">Bold borders, hard shadows, high contrast — confident and unmistakable.</span></div>
+</div></div></section>
+
+<!-- ============================ 5. EDITORIAL SERIF ============================ -->
+<section class="screen t-edit" id="s5"><div class="scr"><div class="wrap">
+  <div class="topbar" style="margin-bottom:6px">
+    <div class="brand"><div class="bmark">C</div><div class="bname">Clarity</div></div>
+    <button class="btn">Sync data</button>
+  </div>
+  <h1 class="lead-h">Your money, made clear.</h1>
+  <p class="intro">A calm, honest look at where you stand — and the plan to get you back to solid ground.</p>
+  <div class="statrow">
+    <div class="stat"><div class="l">Safe to spend</div><div class="v tabular">$1,240.50</div></div>
+    <div class="stat"><div class="l">Total liquidity</div><div class="v tabular">$8,450.00</div></div>
+    <div class="stat"><div class="l">Bills · 14 days</div><div class="v tabular" style="color:#c2683f">$420.00</div></div>
+  </div>
+  <div class="sec">
+    <h3>This week</h3>
+    <p class="quote">You spent 12% less on dining, and you’re carrying a $200 buffer. One thing to watch: Chase Sapphire is at 34% utilization — paying $400 before the statement closes will protect your score.</p>
+  </div>
+  <div class="sec">
+    <h3>The rescue plan</h3>
+    <p style="margin-bottom:14px;color:#5a5044;font-size:17px">$2,100 paid of $6,400 — about a third of the way, and two months ahead of schedule.</p>
+    <div class="prog"><span style="width:33%"></span></div>
+    <p style="margin-top:10px;font-size:15px;color:var(--muted);font-style:italic">Projected debt-free: April 2027</p>
+  </div>
+  <div class="sec">
+    <h3>Ask your advisor</h3>
+    <p style="font-size:17px;color:#5a5044;line-height:1.6">“How much can I safely move to savings this month?” — <span style="color:#9c4a25">You can move <b>$640</b> and still cover every bill plus your buffer.</span></p>
+    <div class="advisor-input" style="margin-top:14px;border:1px solid var(--border);background:#fff;border-radius:10px;color:var(--muted)"><span class="grow">Ask about your money…</span><span style="color:#c2683f">➤</span></div>
+  </div>
+  <div class="sec">
+    <h3>Accounts</h3>
+    <div class="acct"><span>Checking</span><span class="tabular">$2,150.00</span></div>
+    <div class="acct"><span>Savings</span><span class="tabular">$5,800.00</span></div>
+    <div class="acct" style="border:none"><span>Cash</span><span class="tabular">$500.00</span></div>
+  </div>
+  <div class="choose"><button class="pickbtn" data-name="Editorial">✓ Build with Editorial</button><span class="hint">Warm, human, magazine-like — feels like a thoughtful financial coach, not a bank.</span></div>
+</div></div></section>
+
+<!-- ============================ 6. SLATE PRO ============================ -->
+<section class="screen t-slate" id="s6"><div class="scr"><div class="layout">
+  <aside class="side">
+    <div class="sideico on" style="margin-bottom:10px">C</div>
+    <div class="sideico">◉</div><div class="sideico">≡</div><div class="sideico">▤</div><div class="sideico">◈</div><div class="sideico">⚙</div>
+  </aside>
+  <div class="main">
+    <div class="topbar" style="margin-bottom:18px">
+      <div class="brand"><div class="bmark">C</div><div><div class="bname">Clarity</div><div class="bsub" style="font-size:12px;color:var(--muted)">Overview · synced 2m ago</div></div></div>
+      <button class="btn">⟳ Sync</button>
+    </div>
+    <div class="grid4">
+      <div class="card"><div class="kpi-label">Safe to spend</div><div class="kpi-val">$1,240.50</div></div>
+      <div class="card"><div class="kpi-label">Liquidity</div><div class="kpi-val">$8,450.00</div></div>
+      <div class="card"><div class="kpi-label">Bills · 14d</div><div class="kpi-val" style="color:#fca5a5">$420.00</div></div>
+      <div class="card"><div class="kpi-label">Saved MTD</div><div class="kpi-val" style="color:#7dd3fc">+$640</div></div>
+    </div>
+    <div class="grid-main">
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="card">
+          <div class="card-title">▦ Cash flow · last 7 days</div>
+          <div class="bars"><i style="height:40%"></i><i style="height:62%"></i><i style="height:48%"></i><i class="hot" style="height:88%"></i><i style="height:54%"></i><i style="height:70%"></i><i style="height:36%"></i></div>
+          <div class="row" style="font-size:11px;color:var(--muted);margin-top:8px"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+        </div>
+        <div class="card">
+          <div class="card-title">≡ Accounts</div>
+          <table class="tbl"><tr><td>Chase · Checking</td><td>$2,150.00</td></tr><tr><td>Ally · Savings</td><td>$5,800.00</td></tr><tr><td>Cash</td><td>$500.00</td></tr></table>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="card">
+          <div class="card-title">▤ Rescue plan</div>
+          <div class="row" style="margin-bottom:8px;font-size:13px"><span>$2,100 / $6,400</span><span class="chip good">33%</span></div>
+          <div class="prog"><span style="width:33%"></span></div>
+          <div class="kpi-sub" style="margin-top:8px;font-size:12px">Debt-free Apr 2027</div>
+        </div>
+        <div class="card">
+          <div class="card-title">⚠ Alerts</div>
+          <div class="alert"><span style="color:#fca5a5">●</span><span>Chase Sapphire 34% — pay $400 before close</span></div>
+          <div class="alert" style="border:none"><span style="color:#7dd3fc">●</span><span>Dining down 12% vs last week</span></div>
+        </div>
+        <div class="card">
+          <div class="card-title">◈ Advisor</div>
+          <div style="font-size:13px;line-height:1.5;color:var(--muted)">Move <b style="color:#7dd3fc">$640</b> to savings — all bills still covered.</div>
+          <div class="advisor-input" style="margin-top:12px;font-size:12px"><span class="grow">Ask…</span><span style="color:#38bdf8">➤</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="choose"><button class="pickbtn" data-name="Slate Pro">✓ Build with Slate Pro</button><span class="hint">Dense, professional, data-first — everything at a glance for a power user.</span></div>
+  </div>
+</div></div></section>
+
+<!-- ============================ 7. SUNSET SOFT ============================ -->
+<section class="screen t-sun" id="s7"><div class="scr"><div class="wrap">
+  <div class="topbar">
+    <div class="brand"><div class="bmark">C</div><div><div class="bname">Clarity</div><div class="bsub" style="font-size:12px;color:var(--muted)">Hi Dayan 👋</div></div></div>
+    <button class="btn">⟳ Sync</button>
+  </div>
+  <div class="hero">
+    <div style="font-size:13px;opacity:.9;font-weight:600">Safe to spend</div>
+    <div class="kpi-val tabular" style="font-size:52px;font-weight:700;margin:8px 0;color:#fff">$1,240<small style="color:rgba(255,255,255,.7);font-size:24px">.50</small></div>
+    <div style="font-size:13px;opacity:.9;margin-bottom:14px">$200 buffer kept aside · resets in 6 days</div>
+    <div class="prog" style="background:rgba(255,255,255,.25)"><span style="width:62%;background:#fff"></span></div>
+  </div>
+  <div class="pills">
+    <div class="pill"><span style="font-size:12px;color:var(--muted);font-weight:600">Total liquidity</span><span class="kpi-val tabular" style="font-size:24px;font-weight:700;margin-top:5px">$8,450</span></div>
+    <div class="pill"><span style="font-size:12px;color:var(--muted);font-weight:600">Bills · 14d</span><span class="kpi-val tabular" style="font-size:24px;font-weight:700;margin-top:5px;color:#be345a">$420</span></div>
+  </div>
+  <div class="card" style="display:flex;align-items:center;gap:18px;margin-bottom:14px">
+    <div class="ring"><i>33%</i></div>
+    <div><div style="font-weight:700;font-size:15px;margin-bottom:3px">Rescue plan</div><div style="font-size:13px;color:var(--muted);line-height:1.5">$2,100 paid of $6,400 — 2 months ahead. Debt-free by April 2027.</div></div>
+  </div>
+  <div class="card" style="margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div style="font-weight:700;font-size:15px">Worth knowing</div><span class="chip good">2 insights</span></div>
+    <div style="font-size:14px;line-height:1.5;color:#5a4a52;margin-bottom:8px">⚠ Chase Sapphire is at 34% — pay $400 before close to protect your score.</div>
+    <div style="font-size:14px;line-height:1.5;color:#5a4a52">✓ Dining down 12% this week — nice work.</div>
+  </div>
+  <div class="card">
+    <div style="font-weight:700;font-size:15px;margin-bottom:12px">Your advisor</div>
+    <div style="align-self:flex-start;background:#fff5f8;padding:12px 14px;border-radius:16px 16px 16px 4px;font-size:14px;line-height:1.5;color:#3a2e35">Move <b style="color:#be345a">$640</b> to savings — you’ll still cover everything this month. Want me to set it up?</div>
+    <div class="advisor-input" style="margin-top:12px"><span class="grow">Ask anything…</span><span style="color:#fb7185">➤</span></div>
+  </div>
+  <div class="choose"><button class="pickbtn" data-name="Sunset Soft">✓ Build with Sunset Soft</button><span class="hint">Friendly, rounded, mobile-app feel — approachable and warm for everyday use.</span></div>
+</div></div></section>
+
+</main>
+
+<div class="toast" id="toast">Copied — paste it back to Claude</div>
+
+<script>
+  const tabs=[...document.querySelectorAll('.tab')];
+  const screens=[...document.querySelectorAll('.screen')];
+  function go(id){
+    screens.forEach(s=>s.classList.toggle('active',s.id===id));
+    tabs.forEach(t=>t.classList.toggle('active',t.dataset.go===id));
+    window.scrollTo({top:0,behavior:'instant'});
+  }
+  tabs.forEach(t=>t.addEventListener('click',()=>go(t.dataset.go)));
+  const toast=document.getElementById('toast');
+  let tT;
+  document.addEventListener('click',e=>{
+    const b=e.target.closest('.pickbtn'); if(!b)return;
+    const msg='Let’s build Clarity with the “'+b.dataset.name+'” design.';
+    navigator.clipboard&&navigator.clipboard.writeText(msg).catch(()=>{});
+    toast.textContent='Copied: “'+b.dataset.name+'” — paste it back to Claude';
+    toast.classList.add('show');clearTimeout(tT);tT=setTimeout(()=>toast.classList.remove('show'),2600);
+  });
+  document.addEventListener('keydown',e=>{
+    const i=screens.findIndex(s=>s.classList.contains('active'));
+    if(e.key==='ArrowRight'&&i<screens.length-1)go(screens[i+1].id);
+    if(e.key==='ArrowLeft'&&i>0)go(screens[i-1].id);
+  });
+</script>
+</body>
+</html>
