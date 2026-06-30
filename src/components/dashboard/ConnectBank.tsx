@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { usePlaidLink } from "react-plaid-link";
 
 type PlaidAccount = {
@@ -16,6 +17,7 @@ type Status = {
 };
 
 export function ConnectBank() {
+  const router = useRouter();
   const [status, setStatus] = useState<Status | null>(null);
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -67,17 +69,20 @@ export function ConnectBank() {
       });
       setLinkToken(null);
       await refresh();
+      // Re-render the whole (dynamic) route so totals/activity pick up the link.
+      router.refresh();
       setBusy(false);
     },
-    [refresh],
+    [refresh, router],
   );
 
   const disconnect = useCallback(async () => {
     setBusy(true);
     await fetch("/api/plaid/disconnect", { method: "POST" });
     await refresh();
+    router.refresh();
     setBusy(false);
-  }, [refresh]);
+  }, [refresh, router]);
 
   const { open, ready } = usePlaidLink({
     token: linkToken,

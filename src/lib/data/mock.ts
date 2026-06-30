@@ -1,14 +1,14 @@
-/** Seeded, realistic demo data for a "financial rescue" scenario.
- *  Dates are generated relative to `now` so bills always fall in-window and
- *  the dining trend stays meaningful. Swap this module for Prisma queries
- *  later — the shapes already match prisma/schema.prisma. */
+/** Test fixtures for the finance engine (used by scripts/check-finance.mts).
+ *  The app itself uses live Plaid data only — this module is NOT imported by
+ *  any runtime code. Dates are generated relative to `now` so bills fall
+ *  in-window and the dining trend stays meaningful. */
 
 import type { Account, Bill, Debt, Transaction, CashflowDay } from "../types";
 
 function iso(now: Date, offsetDays: number): string {
   const d = new Date(now);
-  d.setDate(d.getDate() + offsetDays);
-  d.setHours(12, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  d.setUTCHours(12, 0, 0, 0);
   return d.toISOString();
 }
 
@@ -58,13 +58,13 @@ export function getTransactions(now: Date = new Date()): Transaction[] {
   ];
 }
 
-/** Outflow per day for the last 7 days (Mon→Sun) for the cash-flow chart. */
+/** In/out per day for the last 7 days (Mon→Sun) for the cash-flow chart. */
 export const cashflow: CashflowDay[] = [
-  { label: "Mon", outflow: 62 },
-  { label: "Tue", outflow: 95 },
-  { label: "Wed", outflow: 74 },
-  { label: "Thu", outflow: 135 },
-  { label: "Fri", outflow: 84 },
-  { label: "Sat", outflow: 108 },
-  { label: "Sun", outflow: 57 },
+  { label: "Mon", outflow: 62, inflow: 0 },
+  { label: "Tue", outflow: 95, inflow: 0 },
+  { label: "Wed", outflow: 74, inflow: 2100 },
+  { label: "Thu", outflow: 135, inflow: 0 },
+  { label: "Fri", outflow: 84, inflow: 0 },
+  { label: "Sat", outflow: 108, inflow: 0 },
+  { label: "Sun", outflow: 57, inflow: 0 },
 ];

@@ -350,6 +350,106 @@ body::before {
   margin-top: 8px;
 }
 
+/* ---------- cashflow: money in vs out ---------- */
+.cf-legend {
+  display: flex;
+  gap: 16px;
+  font-family: var(--font-mono-stack);
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.cf-legend .dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+.cf-legend .dot.in {
+  background: var(--cyan);
+}
+.cf-legend .dot.out {
+  background: var(--violet);
+}
+.bars.io .grp {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  height: 100%;
+}
+.bars.io .grp i {
+  flex: none;
+  width: 44%;
+  min-height: 2px;
+  border-radius: 3px 3px 0 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-bottom: none;
+}
+.bars.io .grp i.in {
+  background: linear-gradient(180deg, #67e8f9, var(--cyan));
+  opacity: 1;
+}
+.bars.io .grp i.out {
+  background: linear-gradient(180deg, var(--violet), var(--violet-deep));
+  opacity: 0.85;
+}
+
+/* ---------- category breakdown rows ---------- */
+.catrow {
+  margin-bottom: 13px;
+}
+.catrow:last-child {
+  margin-bottom: 0;
+}
+.catrow-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.catrow-top .catamt {
+  font-family: var(--font-mono-stack);
+  color: var(--muted);
+}
+
+/* ---------- transaction rows ---------- */
+.txn-amt {
+  font-family: var(--font-mono-stack);
+  font-weight: 500;
+}
+.txn-amt.in {
+  color: var(--mint);
+}
+.txn-cat {
+  font-size: 11px;
+  color: var(--muted-2);
+  font-family: var(--font-mono-stack);
+  text-transform: capitalize;
+}
+.empty-note {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* visually hidden, still read by screen readers */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ---------- accounts ---------- */
 .acct {
   display: flex;

@@ -1,8 +1,21 @@
 # Clarity
 
 A personal **financial dashboard** — it links your real bank via Plaid and shows
-what's safe to spend, a debt-payoff plan, proactive insights, and an AI advisor
-that answers questions grounded in your actual numbers.
+what's safe to spend, where your money comes and goes, a searchable feed of every
+transaction, period statements (week / month / year), a debt-payoff plan,
+proactive insights, and an AI advisor that answers questions grounded in your
+actual numbers.
+
+## Pages
+
+| Page          | What it shows                                                                 |
+| ------------- | ----------------------------------------------------------------------------- |
+| **Overview**  | Safe-to-spend, liquidity, upcoming bills, money-in-vs-out cash flow, insights |
+| **Activity**  | Every transaction — searchable and filterable by category, with in/out/net    |
+| **Reports**   | Statements by period (week / this month / last month / year): income, spend, net, by-category, top merchants, and a 6-month trend |
+| **Accounts**  | Cash & savings, credit-card balances + utilization, net position             |
+| **Plan**      | Avalanche debt-payoff order and projected debt-free date                      |
+| **Advisor**   | Chat grounded in your real snapshot (Claude, or a rule-based fallback)        |
 
 Design language: **Aurora Brutalism** — frosted-glass surfaces on a brutalist
 skeleton (thick borders, hard offset shadows, a blueprint grid seen through the
@@ -49,10 +62,15 @@ accounts** (fetched live on each request — there is no demo/seed data).
 - **Real data, live.** `lib/data/plaid-source.ts` pulls accounts, transactions,
   liabilities (→ debts) and recurring (→ bills) from Plaid; `assemble.ts` turns
   them into the dashboard numbers (all pure + unit-tested in `finance.ts`).
+- **One finance engine.** `finance.ts` holds every calculation as a pure,
+  dependency-free function — balances, safe-to-spend, income/spend by period,
+  category & merchant breakdowns, runway, and the avalanche payoff simulation —
+  so the same numbers power the server pages, the client views, and the advisor,
+  and stay covered by `npm test`.
 - **Auth.** `lib/auth.ts` is a single-user password gate: the login cookie is an
   HMAC of `APP_PASSWORD` keyed by `APP_SECRET`. Enforced only when
   `APP_PASSWORD` is set, so local dev stays open. Pages and every API route are
-  guarded.
+  guarded, and `lib/rate-limit.ts` locks out an IP after repeated failed logins.
 - **Token persistence.** `lib/token-store.ts` keeps the one Plaid access token
   in a local file during dev and in Postgres in production (so the link survives
   on an ephemeral host).

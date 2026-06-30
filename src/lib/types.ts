@@ -1,6 +1,6 @@
-/** Domain model for Clarity. These shapes intentionally mirror the Prisma
- *  schema (prisma/schema.prisma) so the mock store can be swapped for a real
- *  database without touching the UI. */
+/** Domain model for Clarity. Plain, source-agnostic shapes: the Plaid data
+ *  source maps into these, the pure finance engine computes over them, and the
+ *  UI renders them — so a different data source could be swapped in untouched. */
 
 export type AccountType = "checking" | "savings" | "cash" | "credit";
 
@@ -55,7 +55,10 @@ export interface Insight {
 
 export interface CashflowDay {
   label: string;
+  /** ISO date for the day (used for tooltips / ordering). */
+  date?: string;
   outflow: number;
+  inflow: number;
 }
 
 export interface Metrics {
@@ -98,7 +101,7 @@ export interface SpendingTrend {
   pct: number;
 }
 
-/** Raw entities from a data source (mock or database), before assembly. */
+/** Raw entities straight from the data source, before assembly. */
 export interface RawData {
   accounts: Account[];
   bills: Bill[];
@@ -107,12 +110,65 @@ export interface RawData {
   cashflow: CashflowDay[];
 }
 
+export interface CategorySpend {
+  category: string;
+  total: number;
+}
+
+export interface MerchantSpend {
+  merchant: string;
+  total: number;
+  count: number;
+}
+
+export type PeriodKey = "week" | "month" | "last-month" | "year";
+
+/** A self-contained statement for a date range: what came in, what went out,
+ *  and the breakdowns behind it. Powers the Reports/Statements page. */
+export interface PeriodSummary {
+  key: PeriodKey;
+  label: string;
+  /** ISO date strings bounding the period (inclusive). */
+  from: string;
+  to: string;
+  income: number;
+  spending: number;
+  net: number;
+  txnCount: number;
+  byCategory: CategorySpend[];
+  topMerchants: MerchantSpend[];
+}
+
+/** One month of in/out totals — for the rolling trend on the Reports page. */
+export interface MonthlyPoint {
+  label: string;
+  income: number;
+  spending: number;
+  net: number;
+}
+
+export interface Forecast {
+  /** Discretionary amount per day for the rest of the month. */
+  dailySafeToSpend: number;
+  /** Average daily outflow over the last 14 days. */
+  avgDailySpend: number;
+  /** Days spendable cash lasts at the current burn rate (null = unknown). */
+  runwayDays: number | null;
+  /** Months of expenses your liquidity covers (null = unknown). */
+  monthsOfRunway: number | null;
+}
+
 /** Everything the dashboard needs, assembled by the data store. */
 export interface DashboardData {
   user: { name: string };
   accounts: Account[];
   bills: Bill[];
   debts: Debt[];
+  transactions: Transaction[];
+  subscriptions: Bill[];
+  spendingByCategory: CategorySpend[];
+  totalSpentThisMonth: number;
+  forecast: Forecast;
   metrics: Metrics;
   rescue: RescuePlan;
   utilization: Utilization | null;
@@ -132,6 +188,13 @@ export interface FinancialSnapshot {
   nextBill: { name: string; amount: number; dueDate: string } | null;
   buffer: number;
   savedThisMonth: number;
+  incomeThisMonth: number;
+  spentThisMonth: number;
+  /** Top spending categories this month (biggest first, up to ~5). */
+  topCategories: CategorySpend[];
+  /** Biggest merchants this month (biggest first, up to ~5). */
+  topMerchants: MerchantSpend[];
+  forecast: Forecast;
   rescue: RescuePlan;
   utilization: Utilization | null;
 }

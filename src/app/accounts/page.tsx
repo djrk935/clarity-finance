@@ -5,6 +5,8 @@ import { KpiCard } from "@/components/dashboard/KpiCard";
 import { ConnectBank } from "@/components/dashboard/ConnectBank";
 import { isAuthed } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 export default async function AccountsPage() {
   if (!(await isAuthed())) return null;
   const d = await getDashboardData();

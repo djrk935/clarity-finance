@@ -4,8 +4,8 @@
  *  liabilities → debts, recurring → bills). When no bank is linked it returns
  *  empty and the UI shows a Connect prompt — no demo/seed data.
  *
- *  (The Prisma DB layer in db.ts/seed.ts stays for the upcoming deployment,
- *  where we'll persist this into Postgres instead of fetching live each load.) */
+ *  Data is fetched live from Plaid on each request; only the access token is
+ *  persisted (see token-store.ts). */
 
 import { assembleDashboard, assembleSnapshot } from "./assemble";
 import {

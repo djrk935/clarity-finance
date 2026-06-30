@@ -4,6 +4,8 @@ import { PageHead } from "@/components/dashboard/PageHead";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { isAuthed } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 export default async function PlanPage() {
   if (!(await isAuthed())) return null;
   const d = await getDashboardData();

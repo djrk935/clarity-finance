@@ -1,14 +1,13 @@
-/** Pure assembly: raw entities → the shapes the UI consumes. Shared by every
- *  data source (mock today, Prisma tomorrow) so the numbers are computed in
- *  exactly one place. No I/O here. */
+/** Pure assembly: raw entities → the shapes the UI consumes. Centralises the
+ *  numbers so they're computed in exactly one place. No I/O here. */
 
 import * as F from "../finance";
 import { generateInsights } from "../insights";
 import type {
   DashboardData,
   FinancialSnapshot,
+  Forecast,
   RawData,
-  Transaction,
 } from "../types";
 
 /** Tunables that would live in user settings. Zeroed for real data so nothing
@@ -20,17 +19,6 @@ const BILL_WINDOW_DAYS = 14;
 const EXTRA_DEBT_PAYMENT = 0;
 
 const USER_NAME = "Dayan";
-
-/** Net cash flow so far this calendar month (inflows minus outflows). */
-function netThisMonth(transactions: Transaction[], now: Date): number {
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  let net = 0;
-  for (const t of transactions) {
-    const d = new Date(t.date);
-    if (d >= start && d <= now) net += t.amount;
-  }
-  return Math.round(net * 100) / 100;
-}
 
 export function assembleDashboard(
   raw: RawData,
@@ -76,6 +64,22 @@ export function assembleDashboard(
 
   const spendingTrend = F.categoryTrend(raw.transactions, "Dining", now);
 
+  // Spending behaviour, derived once from the live transaction history.
+  const spendingByCategory = F.categorySpendThisMonth(raw.transactions, now);
+  const totalSpentThisMonth = F.totalSpentThisMonth(raw.transactions, now);
+  const incomeThisMonth = F.incomeThisMonth(raw.transactions, now);
+  // Net so far this month (inflows − outflows), same boundary convention.
+  const savedThisMonth = F.round2(incomeThisMonth - totalSpentThisMonth);
+
+  // Forward-looking forecast / runway.
+  const avgDaily = F.avgDailySpend(raw.transactions, now);
+  const forecast: Forecast = {
+    dailySafeToSpend: F.dailySafeToSpend(safeToSpend, F.daysUntilMonthEnd(now)),
+    avgDailySpend: avgDaily,
+    runwayDays: F.runwayDays(spendable, avgDaily),
+    monthsOfRunway: F.monthsOfRunway(totalLiquidity, F.round2(avgDaily * 30)),
+  };
+
   const metrics = {
     totalLiquidity,
     spendable,
@@ -83,7 +87,7 @@ export function assembleDashboard(
     buffer: BUFFER,
     reservedForGoals: RESERVED_FOR_GOALS,
     safeToSpend,
-    savedThisMonth: netThisMonth(raw.transactions, now),
+    savedThisMonth,
     periodBudget: Math.max(spendable, 1),
   };
 
@@ -92,13 +96,24 @@ export function assembleDashboard(
     rescue,
     utilization,
     spendingTrend,
+    topCategory: spendingByCategory[0] ?? null,
   });
+
+  // Newest transactions first — the Activity browser and advisor read this.
+  const transactions = [...raw.transactions].sort(
+    (a, b) => +new Date(b.date) - +new Date(a.date),
+  );
 
   return {
     user: { name: USER_NAME },
     accounts: raw.accounts,
     bills: due,
     debts: raw.debts,
+    transactions,
+    subscriptions: [...raw.bills].sort((a, b) => b.amount - a.amount),
+    spendingByCategory,
+    totalSpentThisMonth,
+    forecast,
     metrics,
     rescue,
     utilization,
@@ -122,6 +137,8 @@ export function assembleSnapshot(
       }
     : null;
 
+  const monthRange = F.periodRange("month", now);
+
   return {
     userName: d.user.name,
     safeToSpend: d.metrics.safeToSpend,
@@ -132,6 +149,11 @@ export function assembleSnapshot(
     nextBill,
     buffer: d.metrics.buffer,
     savedThisMonth: d.metrics.savedThisMonth,
+    incomeThisMonth: F.incomeThisMonth(raw.transactions, now),
+    spentThisMonth: d.totalSpentThisMonth,
+    topCategories: d.spendingByCategory.slice(0, 5),
+    topMerchants: F.topMerchants(raw.transactions, monthRange.from, monthRange.to, 5),
+    forecast: d.forecast,
     rescue: d.rescue,
     utilization: d.utilization,
   };
