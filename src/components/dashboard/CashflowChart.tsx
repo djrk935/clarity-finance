@@ -1,3 +1,4 @@
+import { ArrowDownUp } from "lucide-react";
 import type { CashflowDay } from "@/lib/types";
 import { formatCurrency } from "@/lib/finance";
 
@@ -16,9 +17,7 @@ export function CashflowChart({ days }: { days: CashflowDay[] }) {
   return (
     <section className="panel">
       <h2 className="ptitle">
-        <span className="ic" aria-hidden>
-          ▦
-        </span>{" "}
+        <ArrowDownUp className="ic" size={16} aria-hidden />
         Cash flow · last 7 days
       </h2>
 

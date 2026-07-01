@@ -1,3 +1,4 @@
+import { TrendingDown, Target, Flag } from "lucide-react";
 import { getDashboardData } from "@/lib/data/store";
 import { avalancheOrder, formatCurrency } from "@/lib/finance";
 import { PageHead } from "@/components/dashboard/PageHead";
@@ -24,9 +25,7 @@ export default async function PlanPage() {
       {!hasDebt ? (
         <section className="panel">
           <h2 className="ptitle">
-            <span className="ic" aria-hidden>
-              ▤
-            </span>{" "}
+            <TrendingDown className="ic" size={16} aria-hidden />
             Debt payoff
           </h2>
           <p style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.6 }}>
@@ -41,7 +40,7 @@ export default async function PlanPage() {
             <KpiCard
               label="Debt remaining"
               amount={d.rescue.remaining}
-              valueStyle={{ color: "#ff9aa9" }}
+              valueStyle={{ color: "var(--neg)" }}
             >
               <span style={{ color: "var(--muted)" }}>
                 {d.debts.length} {d.debts.length === 1 ? "balance" : "balances"}
@@ -62,8 +61,8 @@ export default async function PlanPage() {
               <div style={{ marginTop: 11 }}>
                 <span className="chip good">
                   {d.rescue.monthsAhead > 0
-                    ? `${d.rescue.monthsAhead} MONTHS AHEAD`
-                    : `~${d.rescue.projectedMonths} MONTHS`}
+                    ? `${d.rescue.monthsAhead} months ahead`
+                    : `~${d.rescue.projectedMonths} months`}
                 </span>
               </div>
             </section>
@@ -95,9 +94,7 @@ export default async function PlanPage() {
             <div className="col">
               <section className="panel">
                 <h2 className="ptitle">
-                  <span className="ic" aria-hidden>
-                    ◈
-                  </span>{" "}
+                  <Target className="ic" size={16} aria-hidden />
                   Focus order
                 </h2>
                 <p
@@ -114,7 +111,7 @@ export default async function PlanPage() {
                 {order.map((debt, i) => (
                   <div className="acct" key={debt.id}>
                     <span>
-                      <b style={{ color: "var(--cyan)" }}>{i + 1}.</b> {debt.name}
+                      <b style={{ color: "var(--accent)" }}>{i + 1}.</b> {debt.name}
                     </span>
                     <span className="amt tabular">{debt.apr}%</span>
                   </div>
@@ -123,9 +120,7 @@ export default async function PlanPage() {
 
               <section className="panel">
                 <h2 className="ptitle">
-                  <span className="ic" aria-hidden>
-                    ⚑
-                  </span>{" "}
+                  <Flag className="ic" size={16} aria-hidden />
                   Why avalanche
                 </h2>
                 <p style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.55 }}>

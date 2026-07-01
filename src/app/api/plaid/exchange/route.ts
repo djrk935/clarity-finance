@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getPlaidClient, saveAccessToken } from "@/lib/plaid";
+import { clearDataCache } from "@/lib/data/cache";
 import { requireApiAuth } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
       public_token: publicToken,
     });
     await saveAccessToken(res.data.access_token, res.data.item_id);
+    clearDataCache();
     return Response.json({ ok: true });
   } catch (err) {
     console.error("Plaid exchange error:", err);

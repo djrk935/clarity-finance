@@ -1,18 +1,17 @@
+import { Lightbulb } from "lucide-react";
 import type { Insight, InsightTone } from "@/lib/types";
 
 const DOT: Record<InsightTone, string> = {
-  warn: "var(--coral)",
-  good: "var(--mint)",
-  info: "var(--violet)",
+  warn: "var(--neg)",
+  good: "var(--pos)",
+  info: "var(--info)",
 };
 
 export function InsightsPanel({ insights }: { insights: Insight[] }) {
   return (
     <section className="panel">
       <h2 className="ptitle">
-        <span className="ic" aria-hidden>
-          ⚠
-        </span>{" "}
+        <Lightbulb className="ic" size={16} aria-hidden />
         Proactive insights
       </h2>
       {insights.map((i) => (
@@ -23,7 +22,7 @@ export function InsightsPanel({ insights }: { insights: Insight[] }) {
             <div
               style={{
                 fontSize: 13,
-                color: "#c3bbdd",
+                color: "var(--muted)",
                 lineHeight: 1.45,
                 marginTop: 2,
               }}

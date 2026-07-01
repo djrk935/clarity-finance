@@ -2,15 +2,23 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  LayoutDashboard,
+  Receipt,
+  PieChart,
+  Wallet,
+  TrendingDown,
+  Sparkles,
+} from "lucide-react";
 import { SyncButton } from "./SyncButton";
 
 const NAV = [
-  { href: "/", label: "Overview" },
-  { href: "/activity", label: "Activity" },
-  { href: "/reports", label: "Reports" },
-  { href: "/accounts", label: "Accounts" },
-  { href: "/plan", label: "Plan" },
-  { href: "/advisor", label: "Advisor" },
+  { href: "/", label: "Overview", Icon: LayoutDashboard },
+  { href: "/activity", label: "Activity", Icon: Receipt },
+  { href: "/reports", label: "Reports", Icon: PieChart },
+  { href: "/accounts", label: "Accounts", Icon: Wallet },
+  { href: "/plan", label: "Plan", Icon: TrendingDown },
+  { href: "/advisor", label: "Advisor", Icon: Sparkles },
 ];
 
 export function NavBar() {
@@ -26,7 +34,7 @@ export function NavBar() {
           <Link href="/" style={{ textDecoration: "none", color: "inherit" }}>
             <h1 className="bname">Clarity</h1>
           </Link>
-          <div className="bsub">RESCUE MODE · ON TRACK</div>
+          <div className="bsub">Personal finance</div>
         </div>
       </div>
       <nav className="navchips" aria-label="Sections">
@@ -40,6 +48,7 @@ export function NavBar() {
               className={active ? "nchip on" : "nchip"}
               aria-current={active ? "page" : undefined}
             >
+              <n.Icon className="ic" size={15} aria-hidden />
               {n.label}
             </Link>
           );

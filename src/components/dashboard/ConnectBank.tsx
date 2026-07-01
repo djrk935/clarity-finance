@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePlaidLink } from "react-plaid-link";
+import { Landmark } from "lucide-react";
 
 type PlaidAccount = {
   id: string;
@@ -97,9 +98,7 @@ export function ConnectBank() {
     return (
       <section className="panel">
         <h2 className="ptitle">
-          <span className="ic" aria-hidden>
-            ⚿
-          </span>{" "}
+          <Landmark className="ic" size={16} aria-hidden />
           Connect a bank
         </h2>
         <p style={{ fontSize: 13, color: "var(--muted)" }}>Loading…</p>
@@ -111,9 +110,7 @@ export function ConnectBank() {
     return (
       <section className="panel">
         <h2 className="ptitle">
-          <span className="ic" aria-hidden>
-            ⚿
-          </span>{" "}
+          <Landmark className="ic" size={16} aria-hidden />
           Connect a bank
         </h2>
         <p style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.55 }}>
@@ -130,9 +127,7 @@ export function ConnectBank() {
     return (
       <section className="panel">
         <h2 className="ptitle">
-          <span className="ic" aria-hidden>
-            ⚿
-          </span>{" "}
+          <Landmark className="ic" size={16} aria-hidden />
           Linked bank
         </h2>
         <div className="row" style={{ marginBottom: 12 }}>
@@ -154,9 +149,7 @@ export function ConnectBank() {
   return (
     <section className="panel">
       <h2 className="ptitle">
-        <span className="ic" aria-hidden>
-          ⚿
-        </span>{" "}
+        <Landmark className="ic" size={16} aria-hidden />
         Connect a bank
       </h2>
       <p

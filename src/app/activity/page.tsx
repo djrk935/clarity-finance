@@ -18,7 +18,7 @@ export default async function ActivityPage() {
       />
 
       <div className="kpis">
-        <KpiCard label="Spent this month" amount={d.totalSpentThisMonth} valueStyle={{ color: "#ff9aa9" }}>
+        <KpiCard label="Spent this month" amount={d.totalSpentThisMonth} valueStyle={{ color: "var(--neg)" }}>
           <span style={{ color: "var(--muted)" }}>
             {d.transactions.length} transactions on file
           </span>
@@ -26,7 +26,7 @@ export default async function ActivityPage() {
         <KpiCard
           label="Net this month"
           amount={d.metrics.savedThisMonth}
-          valueStyle={{ color: d.metrics.savedThisMonth >= 0 ? "var(--mint)" : "#ff9aa9" }}
+          valueStyle={{ color: d.metrics.savedThisMonth >= 0 ? "var(--pos)" : "var(--neg)" }}
         >
           <span style={{ color: "var(--muted)" }}>income − spending</span>
         </KpiCard>

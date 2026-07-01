@@ -30,12 +30,12 @@ export default async function DashboardPage() {
         <KpiCard
           label="Bills · 14 days"
           amount={d.metrics.upcomingBillsTotal}
-          valueStyle={{ color: "#ff9aa9" }}
+          valueStyle={{ color: "var(--neg)" }}
         >
           <span
             className="delta"
             style={{
-              color: d.metrics.savedThisMonth >= 0 ? "var(--mint)" : "#ff9aa9",
+              color: d.metrics.savedThisMonth >= 0 ? "var(--pos)" : "var(--neg)",
             }}
           >
             {d.metrics.savedThisMonth >= 0

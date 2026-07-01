@@ -1,5 +1,7 @@
 # Clarity
 
+**By [Dayan Kijege](https://github.com/djrk935)** · A personal-finance dashboard built with Next.js, TypeScript & Plaid.
+
 A personal **financial dashboard** — it links your real bank via Plaid and shows
 what's safe to spend, where your money comes and goes, a searchable feed of every
 transaction, period statements (week / month / year), a debt-payoff plan,
@@ -89,6 +91,10 @@ accounts** (fetched live on each request — there is no demo/seed data).
    `PLAID_SECRET`, `PLAID_ENV=production`, `ANTHROPIC_API_KEY`, `APP_PASSWORD`,
    `APP_SECRET`.
 5. Deploy. Visit the app URL, log in with `APP_PASSWORD`, and link your bank.
+
+## Author
+
+**Dayan Kijege** — [github.com/djrk935](https://github.com/djrk935)
 
 ## Accessibility & performance
 

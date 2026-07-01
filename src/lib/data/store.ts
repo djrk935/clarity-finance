@@ -14,6 +14,8 @@ import {
   getPlaidLiabilities,
   getPlaidRecurring,
 } from "./plaid-source";
+import { getCachedRaw, setCachedRaw } from "./cache";
+import { readAccessToken } from "../plaid";
 import { cashflowFromTransactions } from "../finance";
 import type { DashboardData, FinancialSnapshot, RawData } from "../types";
 
@@ -26,8 +28,15 @@ const EMPTY: RawData = {
 };
 
 async function getRealRaw(now: Date): Promise<RawData> {
+  const token = await readAccessToken();
+  if (!token) return EMPTY; // nothing linked yet
+
+  // Reuse the recent pull so tab switches don't re-hit Plaid every time.
+  const hit = getCachedRaw(token);
+  if (hit) return hit;
+
   const accounts = await getPlaidAccounts();
-  if (accounts.length === 0) return EMPTY; // nothing linked yet
+  if (accounts.length === 0) return EMPTY;
 
   const [transactions, debts, bills] = await Promise.all([
     getPlaidTransactions(),
@@ -35,13 +44,15 @@ async function getRealRaw(now: Date): Promise<RawData> {
     getPlaidRecurring(),
   ]);
 
-  return {
+  const raw: RawData = {
     accounts,
     transactions,
     debts,
     bills,
     cashflow: cashflowFromTransactions(transactions, now),
   };
+  setCachedRaw(token, raw);
+  return raw;
 }
 
 export async function getDashboardData(
