@@ -79,10 +79,19 @@ type Intent =
 function classify(message: string): Intent {
   const m = message.toLowerCase();
   if (/\b(hi|hey|hello|yo|sup)\b/.test(m) && m.trim().length < 16) return "greeting";
+  // Check "safe to spend" before the broader spending patterns below.
+  if (/(safe to spend|safe-to-spend|safe spend|afford|discretionary)/.test(m)) return "safe";
+  // Explicit "income vs spending" comparison → income branch (it reports net).
+  if (
+    /(earn|income|made?|making|bringing in).*(vs|versus|compared|and).*(spend|spent|spending)/.test(m) ||
+    /(spend|spent|spending).*(vs|versus|compared).*(earn|income|made?|making)/.test(m)
+  )
+    return "income";
   if (/(where.*(money|cash).*(go|going)|what.*spend|spending|categor|biggest (spend|expense)|where.*went)/.test(m))
     return "spending";
   if (/(merchant|store|who.*paid|where.*shop|top (merchant|store|place))/.test(m)) return "merchant";
-  if (/(income|earn|paid|paycheck|salary|make|coming in|money in)/.test(m)) return "income";
+  if (/(income|earn(ing)?|paid|paycheck|salary|mak(e|ing)|bringing in|coming in|money in)/.test(m))
+    return "income";
   if (/(save|saving|savings|move|transfer|put away|stash)/.test(m)) return "savings";
   if (/(safe to spend|safe spend|spend|afford|discretionary)/.test(m)) return "safe";
   if (/(debt|payoff|pay off|loan|owe|free)/.test(m)) return "debt";
