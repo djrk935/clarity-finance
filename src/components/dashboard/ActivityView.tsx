@@ -43,6 +43,7 @@ export function ActivityView({ transactions }: { transactions: Transaction[] }) 
     let income = 0;
     let spending = 0;
     for (const t of filtered) {
+      if (t.transfer) continue; // internal movement — not real spend/income
       if (t.amount >= 0) income += t.amount;
       else spending += Math.abs(t.amount);
     }
@@ -136,12 +137,19 @@ export function ActivityView({ transactions }: { transactions: Transaction[] }) 
             return (
               <div className="acct" key={t.id}>
                 <div>
-                  <div style={{ fontWeight: 600 }}>{t.description}</div>
+                  <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+                    {t.description}
+                    {t.pending && <span className="tag">pending</span>}
+                    {t.transfer && <span className="tag">transfer</span>}
+                  </div>
                   <div className="txn-cat">
                     {fmtDate(t.date)} · {t.category}
                   </div>
                 </div>
-                <span className={income ? "txn-amt in tabular" : "txn-amt tabular"}>
+                <span
+                  className={income ? "txn-amt in tabular" : "txn-amt tabular"}
+                  style={t.transfer ? { color: "var(--muted-2)" } : undefined}
+                >
                   {income ? "+" : "−"}
                   {formatCurrency(Math.abs(t.amount))}
                 </span>
