@@ -248,4 +248,32 @@ check("current-month spend matches the period statement (same convention)", () =
   assert.equal(F.totalSpentThisMonth(getTransactions(now), now), s.spending);
 });
 
+check("transfers/card payments are excluded from spending & income", () => {
+  const base = getTransactions(now);
+  const withTransfers = [
+    ...base,
+    // $500 moved to savings and a $300 card payment — internal movement.
+    { id: "mv1", date: iso(now, -2), description: "To savings", amount: -500, category: "Transfer Out", transfer: true },
+    { id: "mv2", date: iso(now, -3), description: "Card payment", amount: -300, category: "Loan Payments", transfer: true },
+    { id: "mv3", date: iso(now, -4), description: "From savings", amount: 400, category: "Transfer In", transfer: true },
+  ];
+  // spending/income/net unchanged vs the base fixture (341 out, 2100 in)
+  assert.equal(F.totalSpentThisMonth(withTransfers, now), 341);
+  assert.equal(F.incomeThisMonth(withTransfers, now), 2100);
+  const s = F.summarizePeriod(withTransfers, "month", now);
+  assert.equal(s.spending, 341);
+  assert.equal(s.income, 2100);
+  // and transfers don't create a phantom category or merchant
+  assert.ok(!s.byCategory.some((c) => c.category.includes("Transfer")));
+  assert.ok(!s.topMerchants.some((m) => m.merchant === "To savings"));
+});
+
+// local iso helper mirroring mock.ts (UTC noon on an offset day)
+function iso(n: Date, off: number): string {
+  const d = new Date(n);
+  d.setUTCDate(d.getUTCDate() + off);
+  d.setUTCHours(12, 0, 0, 0);
+  return d.toISOString();
+}
+
 console.log(`\nAll ${passed} checks passed.`);

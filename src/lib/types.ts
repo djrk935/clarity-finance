@@ -42,6 +42,13 @@ export interface Transaction {
   /** Negative = outflow, positive = inflow. */
   amount: number;
   category: string;
+  /** Plaid account this belongs to (enables per-account views later). */
+  accountId?: string;
+  /** Not yet posted (amount may still change). */
+  pending?: boolean;
+  /** Internal movement — a transfer between accounts or a credit-card payment.
+   *  Excluded from spending/income analytics so it doesn't distort totals. */
+  transfer?: boolean;
 }
 
 export type InsightTone = "warn" | "good" | "info";

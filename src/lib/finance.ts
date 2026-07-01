@@ -153,7 +153,7 @@ export function spendByCategory(
   return round2(
     transactions
       .filter((t) => {
-        if (t.category !== category || t.amount >= 0) return false;
+        if (t.transfer || t.category !== category || t.amount >= 0) return false;
         const d = startOfDay(new Date(t.date));
         return d >= lo && d <= hi;
       })
@@ -193,6 +193,7 @@ export function cashflowFromTransactions(
     let outflow = 0;
     let inflow = 0;
     for (const t of transactions) {
+      if (t.transfer) continue;
       const d = startOfDay(new Date(t.date));
       if (d < start || d >= end) continue;
       if (t.amount < 0) outflow += Math.abs(t.amount);
@@ -255,7 +256,7 @@ export function avgDailySpend(
   const hi = startOfDay(now);
   let total = 0;
   for (const t of transactions) {
-    if (t.amount >= 0) continue;
+    if (t.amount >= 0 || t.transfer) continue;
     const d = startOfDay(new Date(t.date));
     if (d >= lo && d <= hi) total += Math.abs(t.amount);
   }
@@ -334,7 +335,7 @@ export function spendingInRange(
   const hi = startOfDay(to);
   let total = 0;
   for (const t of transactions) {
-    if (t.amount >= 0) continue;
+    if (t.amount >= 0 || t.transfer) continue;
     if (inDayRange(t.date, lo, hi)) total += Math.abs(t.amount);
   }
   return round2(total);
@@ -350,7 +351,7 @@ export function incomeInRange(
   const hi = startOfDay(to);
   let total = 0;
   for (const t of transactions) {
-    if (t.amount <= 0) continue;
+    if (t.amount <= 0 || t.transfer) continue;
     if (inDayRange(t.date, lo, hi)) total += t.amount;
   }
   return round2(total);
@@ -374,7 +375,7 @@ export function categorySpendInRange(
   const hi = startOfDay(to);
   const totals = new Map<string, number>();
   for (const t of transactions) {
-    if (t.amount >= 0) continue;
+    if (t.amount >= 0 || t.transfer) continue;
     if (!inDayRange(t.date, lo, hi)) continue;
     totals.set(t.category, (totals.get(t.category) ?? 0) + Math.abs(t.amount));
   }
@@ -394,7 +395,7 @@ export function topMerchants(
   const hi = startOfDay(to);
   const map = new Map<string, { total: number; count: number }>();
   for (const t of transactions) {
-    if (t.amount >= 0) continue;
+    if (t.amount >= 0 || t.transfer) continue;
     if (!inDayRange(t.date, lo, hi)) continue;
     const key = t.description?.trim() || "Other";
     const cur = map.get(key) ?? { total: 0, count: 0 };
