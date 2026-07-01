@@ -15,6 +15,7 @@ import {
   getPlaidRecurring,
 } from "./plaid-source";
 import { getCachedRaw, setCachedRaw } from "./cache";
+import { loadSettings } from "./settings-store";
 import { readAccessToken } from "../plaid";
 import { cashflowFromTransactions } from "../finance";
 import type { DashboardData, FinancialSnapshot, RawData } from "../types";
@@ -58,11 +59,13 @@ async function getRealRaw(now: Date): Promise<RawData> {
 export async function getDashboardData(
   now: Date = new Date(),
 ): Promise<DashboardData> {
-  return assembleDashboard(await getRealRaw(now), now);
+  const [raw, settings] = await Promise.all([getRealRaw(now), loadSettings()]);
+  return assembleDashboard(raw, settings, now);
 }
 
 export async function getSnapshot(
   now: Date = new Date(),
 ): Promise<FinancialSnapshot> {
-  return assembleSnapshot(await getRealRaw(now), now);
+  const [raw, settings] = await Promise.all([getRealRaw(now), loadSettings()]);
+  return assembleSnapshot(raw, settings, now);
 }

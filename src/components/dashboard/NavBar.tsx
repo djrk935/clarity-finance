@@ -9,6 +9,7 @@ import {
   Wallet,
   TrendingDown,
   Sparkles,
+  Settings as SettingsIcon,
 } from "lucide-react";
 import { SyncButton } from "./SyncButton";
 
@@ -54,7 +55,17 @@ export function NavBar() {
           );
         })}
       </nav>
-      <SyncButton />
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Link
+          href="/settings"
+          className={pathname.startsWith("/settings") ? "iconbtn on" : "iconbtn"}
+          aria-label="Settings"
+          aria-current={pathname.startsWith("/settings") ? "page" : undefined}
+        >
+          <SettingsIcon size={17} aria-hidden />
+        </Link>
+        <SyncButton />
+      </div>
     </header>
   );
 }

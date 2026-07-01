@@ -2,6 +2,27 @@
  *  source maps into these, the pure finance engine computes over them, and the
  *  UI renders them — so a different data source could be swapped in untouched. */
 
+/** User-configurable settings that shape the numbers (persisted). */
+export interface Settings {
+  userName: string;
+  /** Cash kept aside — excluded from "safe to spend". */
+  buffer: number;
+  /** Monthly amount reserved for savings goals — excluded from "safe to spend". */
+  savingsGoal: number;
+  /** Extra paid toward debt each month on top of the minimums. */
+  extraDebtPayment: number;
+  /** How many days ahead the "upcoming bills" window looks. */
+  billWindowDays: number;
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  userName: "Dayan",
+  buffer: 0,
+  savingsGoal: 0,
+  extraDebtPayment: 0,
+  billWindowDays: 14,
+};
+
 export type AccountType = "checking" | "savings" | "cash" | "credit";
 
 export interface Account {

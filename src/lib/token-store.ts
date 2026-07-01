@@ -45,7 +45,8 @@ async function fileClear(): Promise<void> {
 
 const globalForPool = globalThis as unknown as { pgPool?: Pool };
 
-function pool(): Pool {
+/** Shared Postgres pool (also used by settings-store). */
+export function pool(): Pool {
   if (!globalForPool.pgPool) {
     const raw = process.env.DATABASE_URL ?? "";
     // pg v8 treats `sslmode=require` as `verify-full`, which rejects DO managed

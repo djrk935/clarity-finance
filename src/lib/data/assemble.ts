@@ -3,28 +3,21 @@
 
 import * as F from "../finance";
 import { generateInsights } from "../insights";
-import type {
-  DashboardData,
-  FinancialSnapshot,
-  Forecast,
-  RawData,
+import {
+  DEFAULT_SETTINGS,
+  type DashboardData,
+  type FinancialSnapshot,
+  type Forecast,
+  type RawData,
+  type Settings,
 } from "../types";
-
-/** Tunables that would live in user settings. Zeroed for real data so nothing
- *  is fabricated; expose them as user settings later. */
-const BUFFER = 0;
-const RESERVED_FOR_GOALS = 0;
-const BILL_WINDOW_DAYS = 14;
-/** Extra thrown at debt each month on top of minimums (0 = minimums-only). */
-const EXTRA_DEBT_PAYMENT = 0;
-
-const USER_NAME = "Dayan";
 
 export function assembleDashboard(
   raw: RawData,
+  settings: Settings = DEFAULT_SETTINGS,
   now: Date = new Date(),
 ): DashboardData {
-  const due = F.upcomingBills(raw.bills, BILL_WINDOW_DAYS, now);
+  const due = F.upcomingBills(raw.bills, settings.billWindowDays, now);
   const upcomingBillsTotal = F.billsTotal(due);
   const spendable = F.spendableBalance(raw.accounts);
   const totalLiquidity = F.totalLiquidity(raw.accounts);
@@ -32,8 +25,8 @@ export function assembleDashboard(
   const safeToSpend = F.safeToSpend({
     spendable,
     upcomingBills: upcomingBillsTotal,
-    buffer: BUFFER,
-    reservedForGoals: RESERVED_FOR_GOALS,
+    buffer: settings.buffer,
+    reservedForGoals: settings.savingsGoal,
   });
 
   const card = raw.accounts.find((a) => a.type === "credit" && a.creditLimit);
@@ -48,7 +41,7 @@ export function assembleDashboard(
 
   const payoff = F.debtPayoffProgress(raw.debts);
   const minTotal = raw.debts.reduce((s, d) => s + d.minPayment, 0);
-  const planBudget = minTotal + EXTRA_DEBT_PAYMENT;
+  const planBudget = minTotal + settings.extraDebtPayment;
   const baseline = F.simulatePayoff(raw.debts, minTotal); // minimums only
   const plan = F.simulatePayoff(raw.debts, planBudget); // active plan
   const rescue = {
@@ -84,8 +77,8 @@ export function assembleDashboard(
     totalLiquidity,
     spendable,
     upcomingBillsTotal,
-    buffer: BUFFER,
-    reservedForGoals: RESERVED_FOR_GOALS,
+    buffer: settings.buffer,
+    reservedForGoals: settings.savingsGoal,
     safeToSpend,
     savedThisMonth,
     periodBudget: Math.max(spendable, 1),
@@ -105,7 +98,7 @@ export function assembleDashboard(
   );
 
   return {
-    user: { name: USER_NAME },
+    user: { name: settings.userName },
     accounts: raw.accounts,
     bills: due,
     debts: raw.debts,
@@ -126,9 +119,10 @@ export function assembleDashboard(
 /** Compact, grounded snapshot for the AI advisor. */
 export function assembleSnapshot(
   raw: RawData,
+  settings: Settings = DEFAULT_SETTINGS,
   now: Date = new Date(),
 ): FinancialSnapshot {
-  const d = assembleDashboard(raw, now);
+  const d = assembleDashboard(raw, settings, now);
   const nextBill = d.bills[0]
     ? {
         name: d.bills[0].name,
