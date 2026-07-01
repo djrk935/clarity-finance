@@ -25,6 +25,8 @@ export function AdvisorChat({ tall = false }: { tall?: boolean }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(true);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     logRef.current?.scrollTo({
@@ -33,33 +35,64 @@ export function AdvisorChat({ tall = false }: { tall?: boolean }) {
     });
   }, [msgs, loading]);
 
+  // Cancel any in-flight stream and stop updating state after unmount.
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      abortRef.current?.abort();
+    };
+  }, []);
+
+  function replaceLast(content: string) {
+    if (!mountedRef.current) return;
+    setMsgs((m) => {
+      const copy = m.slice();
+      copy[copy.length - 1] = { role: "assistant", content };
+      return copy;
+    });
+  }
+
   async function ask(text: string) {
     const message = text.trim();
     if (!message || loading) return;
     setInput("");
-    setMsgs((m) => [...m, { role: "user", content: message }]);
+    // Send the recent conversation (minus the canned welcome) so Claude can
+    // handle follow-ups; the server caps context further.
+    const history = msgs.slice(1).slice(-30).map((m) => ({ role: m.role, content: m.content }));
+    const outgoing = [...history, { role: "user" as const, content: message }];
+    setMsgs((m) => [
+      ...m,
+      { role: "user", content: message },
+      { role: "assistant", content: "" },
+    ]);
     setLoading(true);
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       const res = await fetch("/api/advisor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ messages: outgoing }),
+        signal: controller.signal,
       });
-      const data = (await res.json()) as { reply?: string };
-      setMsgs((m) => [
-        ...m,
-        {
-          role: "assistant",
-          content: data.reply ?? "Sorry — I couldn't work that out just now.",
-        },
-      ]);
-    } catch {
-      setMsgs((m) => [
-        ...m,
-        { role: "assistant", content: "Network hiccup — try again in a moment." },
-      ]);
+      if (!res.ok || !res.body) throw new Error("bad response");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let acc = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        acc += decoder.decode(value, { stream: true });
+        replaceLast(acc);
+      }
+      acc += decoder.decode(); // flush any trailing multibyte bytes
+      replaceLast(acc.trim() ? acc : "Sorry — I couldn't work that out just now.");
+    } catch (err) {
+      if ((err as Error)?.name !== "AbortError") {
+        replaceLast("Network hiccup — try again in a moment.");
+      }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }
 
@@ -75,12 +108,18 @@ export function AdvisorChat({ tall = false }: { tall?: boolean }) {
         ref={logRef}
         style={tall ? { maxHeight: 520, minHeight: 380 } : undefined}
       >
-        {msgs.map((m, i) => (
-          <div key={i} className={m.role === "user" ? "bubble-u" : "bubble-a"}>
-            {m.content}
-          </div>
-        ))}
-        {loading && <div className="bubble-a">Thinking…</div>}
+        {msgs.map((m, i) => {
+          const streaming =
+            m.role === "assistant" &&
+            m.content === "" &&
+            loading &&
+            i === msgs.length - 1;
+          return (
+            <div key={i} className={m.role === "user" ? "bubble-u" : "bubble-a"}>
+              {m.content || (streaming ? "Thinking…" : "")}
+            </div>
+          );
+        })}
       </div>
 
       {/* Persistent live region so assistive tech reliably announces status
