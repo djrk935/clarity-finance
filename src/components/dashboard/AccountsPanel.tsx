@@ -1,3 +1,4 @@
+import { Wallet } from "lucide-react";
 import { formatCurrency } from "@/lib/finance";
 import type { Account } from "@/lib/types";
 
@@ -6,9 +7,7 @@ export function AccountsPanel({ accounts }: { accounts: Account[] }) {
   return (
     <section className="panel">
       <h2 className="ptitle">
-        <span className="ic" aria-hidden>
-          ≡
-        </span>{" "}
+        <Wallet className="ic" size={16} aria-hidden />
         Accounts
       </h2>
       {depository.map((a) => (

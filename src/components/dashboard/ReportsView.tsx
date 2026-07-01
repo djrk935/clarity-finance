@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PieChart, Store, BarChart3 } from "lucide-react";
 import type { MonthlyPoint, PeriodKey, PeriodSummary } from "@/lib/types";
 import { formatCurrency } from "@/lib/finance";
 
@@ -16,9 +17,7 @@ function CategoryBreakdown({ summary }: { summary: PeriodSummary }) {
   return (
     <section className="panel">
       <h2 className="ptitle">
-        <span className="ic" aria-hidden>
-          ◧
-        </span>{" "}
+        <PieChart className="ic" size={16} aria-hidden />
         Where it went · {summary.label}
       </h2>
       {summary.byCategory.length === 0 ? (
@@ -48,9 +47,7 @@ function TopMerchants({ summary }: { summary: PeriodSummary }) {
   return (
     <section className="panel">
       <h2 className="ptitle">
-        <span className="ic" aria-hidden>
-          ◈
-        </span>{" "}
+        <Store className="ic" size={16} aria-hidden />
         Top merchants
       </h2>
       {summary.topMerchants.length === 0 ? (
@@ -82,9 +79,7 @@ function TrendChart({ trend }: { trend: MonthlyPoint[] }) {
   return (
     <section className="panel">
       <h2 className="ptitle">
-        <span className="ic" aria-hidden>
-          ▦
-        </span>{" "}
+        <BarChart3 className="ic" size={16} aria-hidden />
         6-month trend
       </h2>
       <div className="cf-legend" aria-hidden>
@@ -148,7 +143,7 @@ export function ReportsView({
       <div className="kpis">
         <section className="panel">
           <div className="label">Money in · {summary.label}</div>
-          <div className="val tabular" style={{ color: "var(--mint)", fontSize: 30 }}>
+          <div className="val tabular" style={{ color: "var(--pos)", fontSize: 30 }}>
             {formatCurrency(summary.income, false)}
           </div>
           <div style={{ marginTop: 9, fontSize: 12, color: "var(--muted)" }}>
@@ -157,7 +152,7 @@ export function ReportsView({
         </section>
         <section className="panel">
           <div className="label">Money out</div>
-          <div className="val tabular" style={{ color: "#ff9aa9", fontSize: 30 }}>
+          <div className="val tabular" style={{ color: "var(--neg)", fontSize: 30 }}>
             {formatCurrency(summary.spending, false)}
           </div>
           <div style={{ marginTop: 9, fontSize: 12, color: "var(--muted)" }}>
@@ -168,7 +163,7 @@ export function ReportsView({
           <div className="label">Net</div>
           <div
             className="val tabular"
-            style={{ color: net >= 0 ? "var(--mint)" : "#ff9aa9", fontSize: 30 }}
+            style={{ color: net >= 0 ? "var(--pos)" : "var(--neg)", fontSize: 30 }}
           >
             {net >= 0 ? "+" : "−"}
             {formatCurrency(Math.abs(net), false)}

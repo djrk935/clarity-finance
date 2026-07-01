@@ -1,3 +1,4 @@
+import { TrendingDown } from "lucide-react";
 import { formatCurrency } from "@/lib/finance";
 import type { RescuePlan as RescuePlanData } from "@/lib/types";
 
@@ -7,9 +8,7 @@ export function RescuePlan({ rescue }: { rescue: RescuePlanData }) {
   return (
     <section className="panel">
       <h2 className="ptitle">
-        <span className="ic" aria-hidden>
-          ▤
-        </span>{" "}
+        <TrendingDown className="ic" size={16} aria-hidden />
         Debt payoff
       </h2>
 

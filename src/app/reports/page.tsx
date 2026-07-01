@@ -1,3 +1,4 @@
+import { PieChart } from "lucide-react";
 import { getDashboardData } from "@/lib/data/store";
 import { summarizePeriod, monthlyTrend } from "@/lib/finance";
 import { PageHead } from "@/components/dashboard/PageHead";
@@ -32,9 +33,7 @@ export default async function ReportsPage() {
       {empty ? (
         <section className="panel">
           <h2 className="ptitle">
-            <span className="ic" aria-hidden>
-              ▦
-            </span>{" "}
+            <PieChart className="ic" size={16} aria-hidden />
             No data yet
           </h2>
           <p className="empty-note">

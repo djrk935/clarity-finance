@@ -1,3 +1,4 @@
+import { Wallet, CreditCard } from "lucide-react";
 import { getDashboardData } from "@/lib/data/store";
 import { creditUtilization, formatCurrency } from "@/lib/finance";
 import { PageHead } from "@/components/dashboard/PageHead";
@@ -23,13 +24,13 @@ export default async function AccountsPage() {
         <KpiCard label="Total liquidity" amount={d.metrics.totalLiquidity}>
           <span style={{ color: "var(--muted)" }}>{depository.length} accounts</span>
         </KpiCard>
-        <KpiCard label="Total debt" amount={totalDebt} valueStyle={{ color: "#ff9aa9" }}>
+        <KpiCard label="Total debt" amount={totalDebt} valueStyle={{ color: "var(--neg)" }}>
           <span style={{ color: "var(--muted)" }}>{d.debts.length} balances</span>
         </KpiCard>
         <KpiCard
           label="Net position"
           amount={net}
-          valueStyle={{ color: net >= 0 ? "var(--mint)" : "#ff9aa9" }}
+          valueStyle={{ color: net >= 0 ? "var(--pos)" : "var(--neg)" }}
         >
           <span style={{ color: "var(--muted)" }}>liquidity − debt</span>
         </KpiCard>
@@ -39,9 +40,7 @@ export default async function AccountsPage() {
         <div className="col">
           <section className="panel">
             <h2 className="ptitle">
-              <span className="ic" aria-hidden>
-                ≡
-              </span>{" "}
+              <Wallet className="ic" size={16} aria-hidden />
               Cash &amp; savings
             </h2>
             {depository.map((a) => (
@@ -72,9 +71,7 @@ export default async function AccountsPage() {
             return (
               <section className="panel" key={c.id}>
                 <h2 className="ptitle">
-                  <span className="ic" aria-hidden>
-                    ◧
-                  </span>{" "}
+                  <CreditCard className="ic" size={16} aria-hidden />
                   {c.name}
                 </h2>
                 <div className="row" style={{ marginBottom: 11 }}>
@@ -85,16 +82,14 @@ export default async function AccountsPage() {
                     </span>
                   </span>
                   <span className={high ? "chip warn" : "chip good"}>
-                    {Math.round(pct)}% USED
+                    {Math.round(pct)}% used
                   </span>
                 </div>
                 <div className="prog">
                   <span
                     style={{
                       width: `${Math.min(100, pct)}%`,
-                      background: high
-                        ? "linear-gradient(90deg,#fb3b53,#fb7185)"
-                        : undefined,
+                      background: high ? "var(--neg)" : undefined,
                     }}
                   />
                 </div>

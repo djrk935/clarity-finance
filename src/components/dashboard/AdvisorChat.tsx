@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Sparkles, ArrowUp } from "lucide-react";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -65,9 +66,7 @@ export function AdvisorChat({ tall = false }: { tall?: boolean }) {
   return (
     <section className="panel">
       <h2 className="ptitle">
-        <span className="ic" aria-hidden>
-          ◈
-        </span>{" "}
+        <Sparkles className="ic" size={16} aria-hidden />
         AI financial advisor
       </h2>
 
@@ -128,7 +127,7 @@ export function AdvisorChat({ tall = false }: { tall?: boolean }) {
           disabled={loading}
           aria-label="Send"
         >
-          ➤
+          <ArrowUp size={16} aria-hidden />
         </button>
       </form>
     </section>

@@ -50,7 +50,7 @@ export function LoginGate() {
           </div>
           <div>
             <h1 className="bname">Clarity</h1>
-            <div className="bsub">RESCUE MODE · LOCKED</div>
+            <div className="bsub">Personal finance</div>
           </div>
         </div>
         <p style={{ fontSize: 14, color: "var(--muted)", marginBottom: 14 }}>
@@ -67,7 +67,7 @@ export function LoginGate() {
           />
         </div>
         {error && (
-          <p style={{ color: "#ff9aa9", fontSize: 13, marginTop: 10 }}>
+          <p style={{ color: "var(--neg)", fontSize: 13, marginTop: 10 }}>
             {error}
           </p>
         )}

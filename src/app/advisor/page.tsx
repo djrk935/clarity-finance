@@ -1,3 +1,4 @@
+import { Eye, Activity } from "lucide-react";
 import { getSnapshot } from "@/lib/data/store";
 import { formatCurrency } from "@/lib/finance";
 import { PageHead } from "@/components/dashboard/PageHead";
@@ -30,9 +31,7 @@ export default async function AdvisorPage() {
         <div className="col">
           <section className="panel">
             <h2 className="ptitle">
-              <span className="ic" aria-hidden>
-                ◷
-              </span>{" "}
+              <Eye className="ic" size={16} aria-hidden />
               What it can see
             </h2>
             <div className="acct">
@@ -69,13 +68,11 @@ export default async function AdvisorPage() {
 
           <section className="panel">
             <h2 className="ptitle">
-              <span className="ic" aria-hidden>
-                ✶
-              </span>{" "}
+              <Activity className="ic" size={16} aria-hidden />
               Status
             </h2>
             <span className={live ? "chip good" : "chip warn"}>
-              {live ? "LIVE · CLAUDE" : "DEMO · RULE-BASED"}
+              {live ? "Live · Claude" : "Rule-based"}
             </span>
             <p
               style={{

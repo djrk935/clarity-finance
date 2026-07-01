@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Receipt, Search } from "lucide-react";
 import type { Transaction } from "@/lib/types";
 import { formatCurrency } from "@/lib/finance";
 
@@ -52,9 +53,7 @@ export function ActivityView({ transactions }: { transactions: Transaction[] }) 
     return (
       <section className="panel">
         <h2 className="ptitle">
-          <span className="ic" aria-hidden>
-            ≣
-          </span>{" "}
+          <Receipt className="ic" size={16} aria-hidden />
           Transactions
         </h2>
         <p className="empty-note">
@@ -68,9 +67,7 @@ export function ActivityView({ transactions }: { transactions: Transaction[] }) 
   return (
     <section className="panel">
       <h2 className="ptitle">
-        <span className="ic" aria-hidden>
-          ≣
-        </span>{" "}
+        <Receipt className="ic" size={16} aria-hidden />
         Transactions
         <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--muted)" }}>
           {filtered.length} of {transactions.length}
@@ -78,6 +75,7 @@ export function ActivityView({ transactions }: { transactions: Transaction[] }) 
       </h2>
 
       <div className="ainput" style={{ marginTop: 0, marginBottom: 14 }}>
+        <Search size={16} aria-hidden style={{ color: "var(--muted-2)" }} />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -110,19 +108,19 @@ export function ActivityView({ transactions }: { transactions: Transaction[] }) 
       >
         <span>
           In{" "}
-          <b style={{ color: "var(--mint)" }}>
+          <b style={{ color: "var(--pos)" }}>
             {formatCurrency(totals.income, false)}
           </b>
         </span>
         <span>
           Out{" "}
-          <b style={{ color: "#ff9aa9" }}>
+          <b style={{ color: "var(--neg)" }}>
             {formatCurrency(totals.spending, false)}
           </b>
         </span>
         <span>
           Net{" "}
-          <b style={{ color: totals.net >= 0 ? "var(--mint)" : "#ff9aa9" }}>
+          <b style={{ color: totals.net >= 0 ? "var(--pos)" : "var(--neg)" }}>
             {totals.net >= 0 ? "+" : "−"}
             {formatCurrency(Math.abs(totals.net), false)}
           </b>
