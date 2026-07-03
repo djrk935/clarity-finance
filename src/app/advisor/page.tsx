@@ -1,6 +1,6 @@
 import { Eye, Activity } from "lucide-react";
 import { getSnapshot } from "@/lib/data/store";
-import { formatCurrency } from "@/lib/finance";
+import { formatCurrency, pluralize } from "@/lib/finance";
 import { PageHead } from "@/components/dashboard/PageHead";
 import { AdvisorChat } from "@/components/dashboard/AdvisorChat";
 import { isAuthed } from "@/lib/auth";
@@ -45,7 +45,7 @@ export default async function AdvisorPage() {
               </span>
             </div>
             <div className="acct">
-              <span>Bills (14 days)</span>
+              <span>Bills ({pluralize(s.billWindowDays, "day")})</span>
               <span className="amt tabular">
                 {formatCurrency(s.upcomingBillsTotal)}
               </span>

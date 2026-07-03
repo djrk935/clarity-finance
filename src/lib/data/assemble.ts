@@ -82,6 +82,7 @@ export function assembleDashboard(
     safeToSpend,
     savedThisMonth,
     periodBudget: Math.max(spendable, 1),
+    billWindowDays: settings.billWindowDays,
   };
 
   const insights = generateInsights({
@@ -103,7 +104,9 @@ export function assembleDashboard(
     bills: due,
     debts: raw.debts,
     transactions,
-    subscriptions: [...raw.bills].sort((a, b) => b.amount - a.amount),
+    subscriptions: [...raw.bills].sort(
+      (a, b) => +new Date(a.dueDate) - +new Date(b.dueDate),
+    ),
     spendingByCategory,
     totalSpentThisMonth,
     forecast,
@@ -140,6 +143,7 @@ export function assembleSnapshot(
     spendable: d.metrics.spendable,
     upcomingBillsTotal: d.metrics.upcomingBillsTotal,
     upcomingBillsCount: d.bills.length,
+    billWindowDays: settings.billWindowDays,
     nextBill,
     buffer: d.metrics.buffer,
     savedThisMonth: d.metrics.savedThisMonth,
