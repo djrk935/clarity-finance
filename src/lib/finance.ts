@@ -32,6 +32,11 @@ export function formatCurrency(n: number, withCents = true): string {
   }).format(n);
 }
 
+/** "1 day" / "14 days" — count + correctly-pluralized unit. */
+export function pluralize(n: number, unit: string): string {
+  return `${n} ${unit}${n === 1 ? "" : "s"}`;
+}
+
 /* ---------- balances ---------- */
 
 export function totalLiquidity(accounts: Account[]): number {
@@ -491,6 +496,156 @@ export function monthlyTrend(
     });
   }
   return out;
+}
+
+/* ---------- recurring bills (heuristic) ---------- */
+
+function median(nums: number[]): number {
+  if (nums.length === 0) return 0;
+  const s = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+function mostCommon<T>(items: T[], fallback: T): T {
+  const counts = new Map<T, number>();
+  let best = fallback;
+  let bestN = 0;
+  for (const it of items) {
+    const n = (counts.get(it) ?? 0) + 1;
+    counts.set(it, n);
+    if (n > bestN) {
+      bestN = n;
+      best = it;
+    }
+  }
+  return best;
+}
+
+/** Candidate charge cadences, in days (weekly / biweekly / monthly). */
+const CADENCES = [7, 14, 30.44];
+const DAY_MS = 86_400_000;
+
+/** Detect recurring bills/subscriptions from transaction history, without
+ *  Plaid's gated recurring product. Transfers/card payments are ignored, and
+ *  same-day charges from one merchant are merged into a single occurrence
+ *  (split charges / retries). A merchant qualifies when it has ≥3 occurrences
+ *  in the lookback window whose gaps fit a weekly / biweekly / monthly cadence
+ *  — a gap may span a whole missed period (k × cadence), and one irregular gap
+ *  is tolerated on longer histories — and whose amounts are mostly consistent
+ *  (a single outlier like a price change or proration doesn't disqualify).
+ *  The due date is the next predicted occurrence rolled into the future. */
+export function detectRecurringBills(
+  transactions: Transaction[],
+  now: Date = new Date(),
+  lookbackDays = 120,
+): Bill[] {
+  const lo = startOfDay(addDays(now, -lookbackDays));
+  const today = startOfDay(now);
+
+  interface DayEntry {
+    total: number;
+    /** Category of the largest charge that day. */
+    category: string;
+    largest: number;
+  }
+  interface Group {
+    name: string;
+    /** One entry per calendar day (same-day charges merged). */
+    days: Map<number, DayEntry>;
+  }
+  const groups = new Map<string, Group>();
+  for (const t of transactions) {
+    if (t.amount >= 0 || t.transfer) continue;
+    const d = startOfDay(new Date(t.date));
+    // NaN dates compare false to everything, so they'd slip past the window
+    // filter and later crash toISOString() — skip them explicitly.
+    if (Number.isNaN(d.getTime())) continue;
+    if (d < lo || d > today) continue;
+    const raw = t.description?.trim();
+    if (!raw) continue;
+    const key = raw.toLowerCase();
+    const g = groups.get(key) ?? { name: raw, days: new Map<number, DayEntry>() };
+    const amt = Math.abs(t.amount);
+    const day = d.getTime();
+    const e = g.days.get(day);
+    if (!e) {
+      g.days.set(day, { total: amt, category: t.category, largest: amt });
+    } else {
+      e.total += amt;
+      if (amt > e.largest) {
+        e.largest = amt;
+        e.category = t.category;
+      }
+    }
+    groups.set(key, g);
+  }
+
+  const bills: Bill[] = [];
+  for (const [key, g] of groups) {
+    const dates = [...g.days.keys()].sort((a, b) => a - b);
+    if (dates.length < 3) continue; // need ≥3 occurrences (≥2 gaps)
+
+    const gaps: number[] = [];
+    for (let i = 1; i < dates.length; i++) {
+      gaps.push(Math.round((dates[i] - dates[i - 1]) / DAY_MS));
+    }
+
+    // Try each candidate cadence: a gap conforms when it's close to a whole
+    // number of periods (k ≥ 1), so one skipped cycle doesn't disqualify the
+    // series. Most gaps must still be a single period, and only one
+    // non-conforming gap is tolerated (on histories with ≥4 gaps).
+    let best: { cadence: number; score: number } | null = null;
+    for (const c of CADENCES) {
+      // Weekly bills land on a fixed weekday, so allow only ±1 day there — a
+      // wider floor would let steady 5–9-day spending (gas, groceries) count
+      // as "weekly". Longer cadences scale at 20%.
+      const gapTol = c <= 7 ? 1 : Math.max(2, c * 0.2);
+      let singlePeriod = 0;
+      let bad = 0;
+      for (const gap of gaps) {
+        const k = Math.round(gap / c);
+        if (k < 1 || Math.abs(gap - k * c) > gapTol) bad += 1;
+        else if (k === 1) singlePeriod += 1;
+      }
+      const allowedBad = gaps.length >= 4 ? 1 : 0;
+      if (bad <= allowedBad && singlePeriod >= Math.ceil(gaps.length / 2)) {
+        const score = singlePeriod * 10 - bad;
+        if (!best || score > best.score) best = { cadence: c, score };
+      }
+    }
+    if (!best) continue;
+
+    // Amounts must be mostly consistent: at low counts all must agree; with
+    // more history a single outlier (price change, proration) is tolerated.
+    const amounts = dates.map((d) => g.days.get(d)!.total);
+    const medAmt = median(amounts);
+    if (medAmt <= 0) continue;
+    const amtTol = Math.max(1, medAmt * 0.25);
+    const within = amounts.filter((a) => Math.abs(a - medAmt) <= amtTol).length;
+    if (within < Math.max(3, Math.ceil(amounts.length * 0.6))) continue;
+
+    // next predicted due date, rolled forward to the future
+    const cadenceDays = Math.round(best.cadence);
+    const step = cadenceDays * DAY_MS;
+    let next = dates[dates.length - 1] + step;
+    let guard = 0;
+    while (next < today.getTime() && guard++ < 500) next += step;
+
+    bills.push({
+      id: `rec_${key.replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")}`,
+      name: g.name,
+      amount: round2(medAmt),
+      dueDate: new Date(next).toISOString(),
+      category: mostCommon(
+        dates.map((d) => g.days.get(d)!.category),
+        "Recurring",
+      ),
+      cadenceDays,
+    });
+  }
+
+  return bills.sort((a, b) => +new Date(a.dueDate) - +new Date(b.dueDate));
 }
 
 /** Month-by-month avalanche simulation: pay every minimum, then throw the

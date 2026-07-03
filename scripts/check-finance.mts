@@ -248,6 +248,138 @@ check("current-month spend matches the period statement (same convention)", () =
   assert.equal(F.totalSpentThisMonth(getTransactions(now), now), s.spending);
 });
 
+check("detectRecurringBills finds consistent monthly & weekly bills", () => {
+  const at = (off: number) => iso(now, off);
+  const txns = [
+    // monthly Netflix (30-day gaps, constant amount)
+    { id: "n1", date: at(-65), description: "Netflix", amount: -15.99, category: "Subscriptions" },
+    { id: "n2", date: at(-35), description: "Netflix", amount: -15.99, category: "Subscriptions" },
+    { id: "n3", date: at(-5), description: "Netflix", amount: -15.99, category: "Subscriptions" },
+    // weekly Spotify (7-day gaps, constant amount)
+    { id: "s1", date: at(-20), description: "Spotify", amount: -9.99, category: "Subscriptions" },
+    { id: "s2", date: at(-13), description: "Spotify", amount: -9.99, category: "Subscriptions" },
+    { id: "s3", date: at(-6), description: "Spotify", amount: -9.99, category: "Subscriptions" },
+    // weekly cadence but inconsistent amount → rejected
+    { id: "g1", date: at(-18), description: "Big Grocer", amount: -60, category: "Groceries" },
+    { id: "g2", date: at(-11), description: "Big Grocer", amount: -140, category: "Groceries" },
+    { id: "g3", date: at(-4), description: "Big Grocer", amount: -70, category: "Groceries" },
+    // only two occurrences → rejected
+    { id: "o1", date: at(-30), description: "OneOff", amount: -50, category: "Other" },
+    { id: "o2", date: at(-3), description: "OneOff", amount: -50, category: "Other" },
+    // irregular cadence → rejected
+    { id: "r1", date: at(-40), description: "Random", amount: -25, category: "Other" },
+    { id: "r2", date: at(-37), description: "Random", amount: -25, category: "Other" },
+    { id: "r3", date: at(-3), description: "Random", amount: -25, category: "Other" },
+    // recurring transfer → excluded (transfer flag)
+    { id: "t1", date: at(-65), description: "Auto Save", amount: -500, category: "Transfer Out", transfer: true },
+    { id: "t2", date: at(-35), description: "Auto Save", amount: -500, category: "Transfer Out", transfer: true },
+    { id: "t3", date: at(-5), description: "Auto Save", amount: -500, category: "Transfer Out", transfer: true },
+  ];
+  const bills = F.detectRecurringBills(txns, now);
+  assert.deepEqual(bills.map((b) => b.name).sort(), ["Netflix", "Spotify"]);
+  const nf = bills.find((b) => b.name === "Netflix")!;
+  assert.equal(nf.amount, 15.99);
+  assert.equal(nf.category, "Subscriptions");
+  assert.equal(nf.cadenceDays, 30);
+  assert.ok(new Date(nf.dueDate).getTime() > now.getTime()); // next date is in the future
+  const sp = bills.find((b) => b.name === "Spotify")!;
+  assert.equal(sp.amount, 9.99);
+  assert.equal(sp.cadenceDays, 7);
+});
+
+check("detectRecurringBills has no false positives on one-off history", () => {
+  assert.deepEqual(F.detectRecurringBills(getTransactions(now), now), []);
+});
+
+check("detector survives a price change (single amount outlier tolerated)", () => {
+  const at = (off: number) => iso(now, off);
+  const txns = [
+    { id: "p1", date: at(-95), description: "Netflix", amount: -15.49, category: "Subscriptions" },
+    { id: "p2", date: at(-65), description: "Netflix", amount: -15.49, category: "Subscriptions" },
+    { id: "p3", date: at(-35), description: "Netflix", amount: -15.49, category: "Subscriptions" },
+    { id: "p4", date: at(-5), description: "Netflix", amount: -22.99, category: "Subscriptions" },
+  ];
+  const bills = F.detectRecurringBills(txns, now);
+  assert.equal(bills.length, 1);
+  assert.equal(bills[0].name, "Netflix");
+  assert.equal(bills[0].cadenceDays, 30);
+});
+
+check("detector survives one skipped cycle (gap of 2x cadence)", () => {
+  const at = (off: number) => iso(now, off);
+  const txns = [
+    { id: "k1", date: at(-110), description: "Gym", amount: -40, category: "Fitness" },
+    { id: "k2", date: at(-80), description: "Gym", amount: -40, category: "Fitness" },
+    // one skipped month → 60-day gap
+    { id: "k3", date: at(-20), description: "Gym", amount: -40, category: "Fitness" },
+  ];
+  const bills = F.detectRecurringBills(txns, now);
+  assert.equal(bills.length, 1);
+  assert.equal(bills[0].name, "Gym");
+  assert.equal(bills[0].amount, 40);
+});
+
+check("detector merges same-day charges (retry/split doesn't disqualify)", () => {
+  const at = (off: number) => iso(now, off);
+  const txns = [
+    { id: "m1", date: at(-65), description: "Insurance", amount: -100, category: "Insurance" },
+    { id: "m2", date: at(-35), description: "Insurance", amount: -100, category: "Insurance" },
+    { id: "m3", date: at(-5), description: "Insurance", amount: -100, category: "Insurance" },
+    // stray same-day partial charge — merged into that day's occurrence
+    { id: "m4", date: at(-5), description: "Insurance", amount: -5, category: "Insurance" },
+  ];
+  const bills = F.detectRecurringBills(txns, now);
+  assert.equal(bills.length, 1);
+  assert.equal(bills[0].amount, 100); // median of [100, 100, 105]
+});
+
+check("detector classifies biweekly cadence", () => {
+  const at = (off: number) => iso(now, off);
+  const txns = [
+    { id: "b1", date: at(-42), description: "Cleaner", amount: -80, category: "Home" },
+    { id: "b2", date: at(-28), description: "Cleaner", amount: -80, category: "Home" },
+    { id: "b3", date: at(-14), description: "Cleaner", amount: -80, category: "Home" },
+  ];
+  const bills = F.detectRecurringBills(txns, now);
+  assert.equal(bills.length, 1);
+  assert.equal(bills[0].cadenceDays, 14);
+});
+
+check("detector never crashes on malformed dates (and adds no phantom bill)", () => {
+  const at = (off: number) => iso(now, off);
+  const txns = [
+    { id: "v1", date: at(-35), description: "Netflix", amount: -15.99, category: "Subscriptions" },
+    { id: "v2", date: at(-5), description: "Netflix", amount: -15.99, category: "Subscriptions" },
+    // garbage dates must be skipped, not crash toISOString or fake a 3rd occurrence
+    { id: "v3", date: "not-a-date", description: "Netflix", amount: -15.99, category: "Subscriptions" },
+    { id: "v4", date: "", description: "Netflix", amount: -15.99, category: "Subscriptions" },
+  ];
+  assert.deepEqual(F.detectRecurringBills(txns, now), []); // only 2 valid occurrences
+});
+
+check("detector rejects steady non-weekly habits (gas ~9d, groceries ~5-6d)", () => {
+  const at = (off: number) => iso(now, off);
+  const gas = [-27, -18, -9].map((off, i) => ({
+    id: `gas${i}`, date: at(off), description: "Gas Station", amount: -45, category: "Transport",
+  }));
+  const grocery = [-16, -11, -5].map((off, i) => ({
+    id: `gr${i}`, date: at(off), description: "Groceries", amount: -60, category: "Groceries",
+  }));
+  assert.deepEqual(F.detectRecurringBills([...gas, ...grocery], now), []);
+  // …while a genuine weekly bill with ±1-day jitter still passes
+  const weekly = [-21, -15, -7].map((off, i) => ({
+    id: `w${i}`, date: at(off), description: "Lawn Care", amount: -30, category: "Home",
+  }));
+  assert.equal(F.detectRecurringBills(weekly, now).length, 1);
+});
+
+check("pluralize renders singular and plural units", () => {
+  assert.equal(F.pluralize(1, "day"), "1 day");
+  assert.equal(F.pluralize(14, "day"), "14 days");
+  assert.equal(F.pluralize(1, "bill"), "1 bill");
+  assert.equal(F.pluralize(0, "bill"), "0 bills");
+});
+
 check("transfers/card payments are excluded from spending & income", () => {
   const base = getTransactions(now);
   const withTransfers = [

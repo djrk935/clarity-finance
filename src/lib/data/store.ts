@@ -17,7 +17,7 @@ import {
 import { getCachedRaw, setCachedRaw } from "./cache";
 import { loadSettings } from "./settings-store";
 import { readAccessToken } from "../plaid";
-import { cashflowFromTransactions } from "../finance";
+import { cashflowFromTransactions, detectRecurringBills } from "../finance";
 import type { DashboardData, FinancialSnapshot, RawData } from "../types";
 
 const EMPTY: RawData = {
@@ -39,11 +39,16 @@ async function getRealRaw(now: Date): Promise<RawData> {
   const accounts = await getPlaidAccounts();
   if (accounts.length === 0) return EMPTY;
 
-  const [transactions, debts, bills] = await Promise.all([
+  const [transactions, debts, plaidBills] = await Promise.all([
     getPlaidTransactions(),
     getPlaidLiabilities(),
     getPlaidRecurring(),
   ]);
+
+  // Prefer Plaid's recurring product when available; otherwise derive recurring
+  // bills from the transaction history (that product is a gated add-on).
+  const bills =
+    plaidBills.length > 0 ? plaidBills : detectRecurringBills(transactions, now);
 
   const raw: RawData = {
     accounts,

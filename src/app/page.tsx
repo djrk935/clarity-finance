@@ -1,5 +1,5 @@
 import { getDashboardData } from "@/lib/data/store";
-import { formatCurrency } from "@/lib/finance";
+import { formatCurrency, pluralize } from "@/lib/finance";
 import { isAuthed } from "@/lib/auth";
 import { KpiHero } from "@/components/dashboard/KpiHero";
 import { KpiCard } from "@/components/dashboard/KpiCard";
@@ -7,6 +7,7 @@ import { CashflowChart } from "@/components/dashboard/CashflowChart";
 import { RescuePlan } from "@/components/dashboard/RescuePlan";
 import { InsightsPanel } from "@/components/dashboard/InsightsPanel";
 import { AccountsPanel } from "@/components/dashboard/AccountsPanel";
+import { BillsPanel } from "@/components/dashboard/BillsPanel";
 import { AdvisorChat } from "@/components/dashboard/AdvisorChat";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +29,7 @@ export default async function DashboardPage() {
           <span style={{ color: "var(--muted)" }}>{accountCount} accounts</span>
         </KpiCard>
         <KpiCard
-          label="Bills · 14 days"
+          label={`Bills · ${pluralize(d.metrics.billWindowDays, "day")}`}
           amount={d.metrics.upcomingBillsTotal}
           valueStyle={{ color: "var(--neg)" }}
         >
@@ -49,6 +50,7 @@ export default async function DashboardPage() {
         <div className="col">
           <AdvisorChat />
           <CashflowChart days={d.cashflow} />
+          <BillsPanel bills={d.subscriptions} />
         </div>
         <div className="col">
           <RescuePlan rescue={d.rescue} />

@@ -43,6 +43,9 @@ export interface Bill {
   /** ISO date string. */
   dueDate: string;
   category: string;
+  /** Charge cadence in days (7 / 14 / 30) when known — set by the heuristic
+   *  detector; used to normalize amounts to a monthly figure. */
+  cadenceDays?: number;
 }
 
 export interface Debt {
@@ -99,6 +102,8 @@ export interface Metrics {
   savedThisMonth: number;
   /** Discretionary budget for the period; used for the hero progress bar. */
   periodBudget: number;
+  /** How many days ahead the upcoming-bills total covers. */
+  billWindowDays: number;
 }
 
 export interface RescuePlan {
@@ -213,6 +218,8 @@ export interface FinancialSnapshot {
   spendable: number;
   upcomingBillsTotal: number;
   upcomingBillsCount: number;
+  /** Days the upcoming-bills window covers (user-configurable). */
+  billWindowDays: number;
   nextBill: { name: string; amount: number; dueDate: string } | null;
   buffer: number;
   savedThisMonth: number;

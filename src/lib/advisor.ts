@@ -2,7 +2,7 @@
  *  ANTHROPIC_API_KEY is configured, and also defines the system prompt used
  *  for the live Claude path. Every answer is grounded in the snapshot. */
 
-import { formatCurrency, payToUtilizationTarget, round2 } from "./finance";
+import { formatCurrency, payToUtilizationTarget, pluralize, round2 } from "./finance";
 import type { FinancialSnapshot } from "./types";
 
 /** A discretionary cushion we keep back when recommending savings transfers. */
@@ -52,7 +52,7 @@ export function buildSystemPrompt(s: FinancialSnapshot): string {
     `Top spending categories this month: ${categories}`,
     `Biggest merchants this month: ${merchants}`,
     `Avg daily spend (14d): ${formatCurrency(s.forecast.avgDailySpend)}; cash runway: ${runway}`,
-    `Upcoming bills (next 14 days): ${formatCurrency(s.upcomingBillsTotal)} across ${s.upcomingBillsCount} bills`,
+    `Upcoming bills (next ${pluralize(s.billWindowDays, "day")}): ${formatCurrency(s.upcomingBillsTotal)} across ${pluralize(s.upcomingBillsCount, "bill")}`,
     s.nextBill
       ? `Next bill: ${s.nextBill.name} ${formatCurrency(s.nextBill.amount)}`
       : "Next bill: none",
@@ -146,10 +146,10 @@ export function ruleBasedReply(
       return s.nextBill
         ? `You have ${formatCurrency(
             s.upcomingBillsTotal,
-          )} in bills over the next two weeks, starting with ${s.nextBill.name} (${formatCurrency(
+          )} in bills over the next ${pluralize(s.billWindowDays, "day")}, starting with ${s.nextBill.name} (${formatCurrency(
             s.nextBill.amount,
           )}). All of it is covered by your spendable cash.`
-        : `No bills are due in the next two weeks — a good window to push extra toward savings or debt.`;
+        : `No bills are due in the next ${pluralize(s.billWindowDays, "day")} — a good window to push extra toward savings or debt.`;
 
     case "credit": {
       if (!s.utilization)
