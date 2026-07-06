@@ -605,6 +605,19 @@ check("insights: budget alerts can't crowd out utilization / low safe-to-spend",
   assert.equal(ids.filter((id) => id.startsWith("budget-")).length, 2);
 });
 
+check("transactionsToCsv escapes quotes/commas and defuses formulas", () => {
+  const csv = F.transactionsToCsv([
+    { id: "a", date: "2026-06-01T00:00:00.000Z", description: 'He said "hi", ok', amount: -12.5, category: "Dining" },
+    { id: "b", date: "2026-06-02T00:00:00.000Z", description: "=HYPERLINK(evil)", amount: 2100, category: "Income", pending: true },
+    { id: "c", date: "2026-06-03T00:00:00.000Z", description: "To savings", amount: -500, category: "Transfer Out", transfer: true },
+  ]);
+  const lines = csv.trimEnd().split("\n");
+  assert.equal(lines[0], "Date,Description,Category,Amount,Pending,Transfer");
+  assert.equal(lines[1], '2026-06-01,"He said ""hi"", ok",Dining,-12.5,,');
+  assert.equal(lines[2], "2026-06-02,'=HYPERLINK(evil),Income,2100,yes,");
+  assert.equal(lines[3], "2026-06-03,To savings,Transfer Out,-500,,yes");
+});
+
 check("renderDigest carries the snapshot's numbers verbatim", () => {
   const { subject, text } = renderDigest({
     userName: "Dayan",

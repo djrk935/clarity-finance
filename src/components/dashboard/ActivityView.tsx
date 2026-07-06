@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Receipt, Search } from "lucide-react";
+import { Download, Receipt, Search } from "lucide-react";
 import type { Transaction } from "@/lib/types";
-import { formatCurrency } from "@/lib/finance";
+import { formatCurrency, transactionsToCsv } from "@/lib/finance";
 
 // Format in UTC: dates are stored as UTC midnight, and this component renders
 // on both server and client — a TZ-dependent formatter would hydrate-mismatch.
@@ -39,6 +39,19 @@ export function ActivityView({ transactions }: { transactions: Transaction[] }) 
     });
   }, [transactions, query, category]);
 
+  // Exports exactly what's on screen — the current search/category filter.
+  function exportCsv() {
+    const blob = new Blob([transactionsToCsv(filtered)], {
+      type: "text/csv;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `clarity-transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const totals = useMemo(() => {
     let income = 0;
     let spending = 0;
@@ -73,6 +86,16 @@ export function ActivityView({ transactions }: { transactions: Transaction[] }) 
         <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--muted)" }}>
           {filtered.length} of {transactions.length}
         </span>
+        <button
+          type="button"
+          className="nchip"
+          onClick={exportCsv}
+          disabled={filtered.length === 0}
+          aria-label={`Export ${filtered.length} transactions as CSV`}
+        >
+          <Download className="ic" size={14} aria-hidden />
+          CSV
+        </button>
       </h2>
 
       <div className="ainput" style={{ marginTop: 0, marginBottom: 14 }}>

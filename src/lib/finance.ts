@@ -395,6 +395,32 @@ export function budgetProgress(
     .sort((a, b) => b.pct - a.pct);
 }
 
+/* ---------- CSV export ---------- */
+
+function csvField(v: string): string {
+  // Neutralize spreadsheet formula injection (a hostile merchant name like
+  // "=HYPERLINK(...)" must not execute when the export opens in Excel).
+  const s = /^[=+@\t\r-]/.test(v) ? `'${v}` : v;
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/** Transactions → CSV (RFC 4180), given order preserved. Dates are emitted as
+ *  the raw ISO calendar day (no Date parsing, so no timezone shift), amounts
+ *  as plain signed numbers. */
+export function transactionsToCsv(transactions: Transaction[]): string {
+  const rows = transactions.map((t) =>
+    [
+      csvField(t.date.slice(0, 10)),
+      csvField(t.description),
+      csvField(t.category),
+      String(t.amount),
+      t.pending ? "yes" : "",
+      t.transfer ? "yes" : "",
+    ].join(","),
+  );
+  return ["Date,Description,Category,Amount,Pending,Transfer", ...rows].join("\n") + "\n";
+}
+
 /* ---------- spending alerts ---------- */
 
 export interface SpendingAlert {
