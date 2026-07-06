@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 import { Check, Plus, X } from "lucide-react";
 import type { Settings } from "@/lib/types";
 
-type NumKey = "buffer" | "savingsGoal" | "extraDebtPayment" | "billWindowDays";
+type NumKey =
+  | "buffer"
+  | "savingsGoal"
+  | "extraDebtPayment"
+  | "billWindowDays"
+  | "alertSafeToSpendBelow";
 
 /** One editable budget row (strings while editing; coerced on submit). */
 interface BudgetRow {
@@ -15,7 +20,12 @@ interface BudgetRow {
 
 /** Form state holds raw strings so numeric fields can be cleared/edited freely
  *  (no snap-to-zero); values are coerced on submit. */
-type FormState = { userName: string; budgets: BudgetRow[] } & Record<NumKey, string>;
+type FormState = {
+  userName: string;
+  budgets: BudgetRow[];
+  alertsEnabled: boolean;
+  alertEmail: string;
+} & Record<NumKey, string>;
 
 function toForm(s: Settings): FormState {
   return {
@@ -25,6 +35,9 @@ function toForm(s: Settings): FormState {
     extraDebtPayment: String(s.extraDebtPayment),
     billWindowDays: String(s.billWindowDays),
     budgets: s.budgets.map((b) => ({ category: b.category, limit: String(b.limit) })),
+    alertsEnabled: s.alertsEnabled,
+    alertEmail: s.alertEmail,
+    alertSafeToSpendBelow: String(s.alertSafeToSpendBelow),
   };
 }
 
@@ -80,6 +93,9 @@ export function SettingsForm({
       budgets: form.budgets
         .map((b) => ({ category: b.category.trim(), limit: Number(b.limit) || 0 }))
         .filter((b) => b.category && b.limit > 0),
+      alertsEnabled: form.alertsEnabled,
+      alertEmail: form.alertEmail.trim(),
+      alertSafeToSpendBelow: Number(form.alertSafeToSpendBelow) || 0,
     };
     if (form.userName.trim()) payload.userName = form.userName.trim();
 
@@ -222,6 +238,62 @@ export function SettingsForm({
           <Plus className="ic" size={14} aria-hidden />
           Add budget
         </button>
+      </div>
+
+      <div className="field">
+        <label htmlFor="alertsEnabled">Email alerts</label>
+        <div className="desc">
+          Get an email when a budget goes over or safe-to-spend runs low. Off by
+          default — nothing is sent unless you turn this on.
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+          <input
+            id="alertsEnabled"
+            type="checkbox"
+            checked={form.alertsEnabled}
+            onChange={(e) => {
+              const checked = e.target.checked;
+              setForm((f) => ({ ...f, alertsEnabled: checked }));
+              setSaved(false);
+            }}
+          />
+          <label htmlFor="alertsEnabled" style={{ fontWeight: 400, fontSize: 13 }}>
+            Send spending alerts by email
+          </label>
+        </div>
+        {form.alertsEnabled && (
+          <>
+            <div className="ainput" style={{ marginTop: 8 }}>
+              <input
+                type="email"
+                maxLength={254}
+                placeholder="you@example.com"
+                aria-label="Alert email address"
+                value={form.alertEmail}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setForm((f) => ({ ...f, alertEmail: v }));
+                  setSaved(false);
+                }}
+              />
+            </div>
+            <div className="desc" style={{ marginTop: 10 }}>
+              Alert when safe-to-spend drops below ($0 = never):
+            </div>
+            <div className="ainput" style={{ marginTop: 8 }}>
+              <span style={{ color: "var(--muted-2)" }}>$</span>
+              <input
+                type="number"
+                min={0}
+                step={25}
+                inputMode="decimal"
+                aria-label="Safe-to-spend alert threshold"
+                value={form.alertSafeToSpendBelow}
+                onChange={(e) => set("alertSafeToSpendBelow", e.target.value)}
+              />
+            </div>
+          </>
+        )}
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>

@@ -17,6 +17,10 @@ const BodySchema = z.object({
     .array(z.object({ category: z.string(), limit: z.coerce.number() }))
     .max(100)
     .optional(),
+  // Strict boolean (not coerced — "false" must not become true).
+  alertsEnabled: z.boolean().optional(),
+  alertEmail: z.string().max(254).optional(),
+  alertSafeToSpendBelow: z.coerce.number().optional(),
 });
 
 export async function GET() {

@@ -47,7 +47,26 @@ function normalize(raw: unknown): Settings {
       clampNum(s.billWindowDays, DEFAULT_SETTINGS.billWindowDays, 1, 60),
     ),
     budgets: sanitizeBudgets(s.budgets),
+    // Strict === true so junk in a hand-edited row can't switch emails on.
+    alertsEnabled: s.alertsEnabled === true,
+    alertEmail: sanitizeEmail(s.alertEmail),
+    alertSafeToSpendBelow: round2(
+      clampNum(
+        s.alertSafeToSpendBelow,
+        DEFAULT_SETTINGS.alertSafeToSpendBelow,
+        0,
+        100_000,
+      ),
+    ),
   };
+}
+
+/** Minimal shape check — enough to stop obvious junk without rejecting valid
+ *  addresses; the provider is the real validator. Invalid → "" (alerts off). */
+function sanitizeEmail(v: unknown): string {
+  if (typeof v !== "string") return "";
+  const e = v.trim().slice(0, 254);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) ? e : "";
 }
 
 /* ---------------- file mode ---------------- */

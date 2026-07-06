@@ -395,6 +395,63 @@ export function budgetProgress(
     .sort((a, b) => b.pct - a.pct);
 }
 
+/* ---------- spending alerts ---------- */
+
+export interface SpendingAlert {
+  /** Stable de-dupe key — one send per key; keys embed the month so every
+   *  alert re-arms when a new month starts. */
+  key: string;
+  title: string;
+  detail: string;
+}
+
+/** Which alerts should fire right now — the pure "should this alert fire"
+ *  predicate. The caller supplies what was already sent and persists the
+ *  returned keys after a successful send, so the same condition can't spam
+ *  every sync. */
+export function alertsToFire(i: {
+  budgets: BudgetStatus[];
+  safeToSpend: number;
+  /** Fire the low-safe alert under this many dollars (≤ 0 disables it). */
+  safeToSpendBelow: number;
+  /** "YYYY-MM" (UTC) month stamp baked into the de-dupe keys. */
+  month: string;
+  alreadySent: string[];
+}): SpendingAlert[] {
+  const sent = new Set(i.alreadySent);
+  const out: SpendingAlert[] = [];
+
+  for (const b of i.budgets) {
+    if (b.tone !== "over") continue;
+    const key = `budget-over:${b.category.toLowerCase()}:${i.month}`;
+    if (sent.has(key)) continue;
+    out.push({
+      key,
+      title: `Over your ${b.category} budget`,
+      detail: `${formatCurrency(b.spent)} spent of the ${formatCurrency(
+        b.limit,
+        false,
+      )} ${b.category} budget this month — ${formatCurrency(b.spent - b.limit)} over.`,
+    });
+  }
+
+  if (i.safeToSpendBelow > 0 && i.safeToSpend < i.safeToSpendBelow) {
+    const key = `low-safe:${i.month}`;
+    if (!sent.has(key)) {
+      out.push({
+        key,
+        title: "Safe to spend is running low",
+        detail: `${formatCurrency(i.safeToSpend)} left before upcoming bills — below your ${formatCurrency(
+          i.safeToSpendBelow,
+          false,
+        )} alert threshold.`,
+      });
+    }
+  }
+
+  return out;
+}
+
 /* ---------- payoff strategy ---------- */
 
 /** Debts ordered by the avalanche method (highest APR first). */

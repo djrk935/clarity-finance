@@ -506,6 +506,54 @@ check("budgetProgress ignores transfers (uses the same spend convention)", () =>
   assert.equal(s.spent, 205); // transfer didn't count against the budget
 });
 
+check("alertsToFire: fires once per key, respects threshold, re-arms monthly", () => {
+  const over = {
+    category: "Dining",
+    limit: 200,
+    spent: 260,
+    pct: 130,
+    projected: 300,
+    tone: "over" as const,
+  };
+  const pacing = { ...over, category: "Fun", spent: 150, pct: 75, tone: "warn" as const };
+  const base = {
+    budgets: [over, pacing],
+    safeToSpend: 120,
+    safeToSpendBelow: 300,
+    month: "2026-07",
+    alreadySent: [] as string[],
+  };
+
+  // First evaluation: the over-budget category and low-safe fire; warn doesn't.
+  const first = F.alertsToFire(base);
+  assert.deepEqual(
+    first.map((a) => a.key).sort(),
+    ["budget-over:dining:2026-07", "low-safe:2026-07"],
+  );
+
+  // Same state with those keys recorded → nothing fires again (no spam).
+  assert.deepEqual(
+    F.alertsToFire({ ...base, alreadySent: first.map((a) => a.key) }),
+    [],
+  );
+
+  // New month → keys differ → both re-arm.
+  assert.equal(
+    F.alertsToFire({ ...base, month: "2026-08", alreadySent: first.map((a) => a.key) }).length,
+    2,
+  );
+
+  // Threshold respected: safe-to-spend above it, and 0 disables entirely.
+  assert.deepEqual(
+    F.alertsToFire({ ...base, budgets: [], safeToSpend: 500 }),
+    [],
+  );
+  assert.deepEqual(
+    F.alertsToFire({ ...base, budgets: [], safeToSpendBelow: 0 }),
+    [],
+  );
+});
+
 check("insights: budget alerts can't crowd out utilization / low safe-to-spend", () => {
   // Worst case: high utilization + 3 over-budget categories + a pacing warn +
   // low safe-to-spend. Budget alerts are capped at 2 so both safety-critical

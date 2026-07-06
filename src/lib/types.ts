@@ -45,6 +45,13 @@ export interface Settings {
   billWindowDays: number;
   /** Per-category monthly spending caps. */
   budgets: Budget[];
+  /** Master switch for outbound email alerts. Default off — sending email is
+   *  a side-effect the user must explicitly opt into. */
+  alertsEnabled: boolean;
+  /** Where alert emails go (empty = alerts stay off). */
+  alertEmail: string;
+  /** Email when safe-to-spend drops below this many dollars (0 = never). */
+  alertSafeToSpendBelow: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -54,6 +61,9 @@ export const DEFAULT_SETTINGS: Settings = {
   extraDebtPayment: 0,
   billWindowDays: 14,
   budgets: [],
+  alertsEnabled: false,
+  alertEmail: "",
+  alertSafeToSpendBelow: 300,
 };
 
 export type AccountType = "checking" | "savings" | "cash" | "credit";

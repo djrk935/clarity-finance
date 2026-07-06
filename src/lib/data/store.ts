@@ -18,6 +18,7 @@ import {
 import { getCachedRaw, setCachedRaw } from "./cache";
 import { loadSettings } from "./settings-store";
 import { recordNetWorthSnapshot } from "./history-store";
+import { runSpendingAlerts } from "../notify";
 import { readAccessToken } from "../plaid";
 import { cashflowFromTransactions, detectRecurringBills, netWorth } from "../finance";
 import type { DashboardData, FinancialSnapshot, RawData } from "../types";
@@ -70,6 +71,13 @@ async function getRealRaw(now: Date): Promise<RawData> {
       await recordNetWorthSnapshot(netWorth(accounts, debts), now);
     } catch (err) {
       console.error("Net-worth snapshot failed:", err);
+    }
+    // Post-sync spending alerts (opt-in, de-duped) — same best-effort rule.
+    try {
+      const settings = await loadSettings();
+      await runSpendingAlerts(assembleDashboard(raw, settings, now), settings, now);
+    } catch (err) {
+      console.error("Spending alerts failed:", err);
     }
   }
   return raw;
