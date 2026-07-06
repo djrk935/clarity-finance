@@ -1,8 +1,17 @@
-/** Live account data from a linked Plaid item. Returns [] when Plaid isn't
- *  configured or no bank is linked, so callers can merge unconditionally. */
+/** Account data from a linked Plaid item. Returns [] when Plaid isn't
+ *  configured or no bank is linked, so callers can merge unconditionally.
+ *  Balances/liabilities/recurring are fetched live; transactions sync
+ *  incrementally into Postgres when available (see txn-store.ts). */
 
-import type { AccountBase, Transaction as PlaidTxn } from "plaid";
+import type { PlaidApi, Transaction as PlaidTxn, AccountBase } from "plaid";
 import { getPlaidClient, readAccessToken } from "../plaid";
+import { toTransaction, titleCase } from "./plaid-map";
+import {
+  txnStoreEnabled,
+  readSyncCursor,
+  applySyncDelta,
+  readStoredTransactions,
+} from "./txn-store";
 import type { Account, AccountType, Transaction, Debt, Bill } from "../types";
 
 function round2(n: number): number {
@@ -58,73 +67,121 @@ export async function getPlaidAccounts(): Promise<Account[]> {
   }
 }
 
-function titleCase(s: string): string {
-  return s
-    .toLowerCase()
-    .split("_")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
+interface SyncDelta {
+  added: PlaidTxn[];
+  modified: PlaidTxn[];
+  /** Our-domain ids ("plaid_<txn_id>") of removed transactions. */
+  removed: string[];
+  cursor: string;
+  /** True when the walk reached has_more=false. Per Plaid's contract a cursor
+   *  must only be persisted from a completed walk — the pre-pagination cursor
+   *  is the documented recovery point for MUTATION_DURING_PAGINATION. */
+  completed: boolean;
 }
 
-// Plaid PFC *detailed* values that are genuinely internal money movement, not
-// real spend/income. We intentionally key on `detailed` (not `primary`) so we
-// only exclude account-to-account moves and credit-card payments — while
-// keeping deposits, P2P income, and car/mortgage/student-loan payments as real
-// income/spending. (Credit-card payments are excluded because the card's own
-// purchases already count as spend, so counting the payment would double-count.)
-const TRANSFER_DETAILED = new Set([
-  "TRANSFER_IN_ACCOUNT_TRANSFER",
-  "TRANSFER_IN_SAVINGS",
-  "TRANSFER_IN_INVESTMENT_AND_RETIREMENT_FUNDS",
-  "TRANSFER_OUT_ACCOUNT_TRANSFER",
-  "TRANSFER_OUT_SAVINGS",
-  "TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS",
-  "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT",
-]);
-
-function toTransaction(t: PlaidTxn): Transaction {
-  const pfc = t.personal_finance_category?.primary;
-  const detailed = t.personal_finance_category?.detailed;
-  const category =
-    pfc === "FOOD_AND_DRINK"
-      ? "Dining"
-      : pfc
-        ? titleCase(pfc)
-        : (t.category?.[0] ?? "Other");
-  return {
-    id: `plaid_${t.transaction_id}`,
-    date: new Date(t.date).toISOString(),
-    description: t.merchant_name ?? t.name,
-    // Plaid uses positive for money leaving the account; we use negative.
-    amount: -t.amount,
-    category,
-    accountId: t.account_id,
-    pending: t.pending ?? false,
-    transfer: detailed ? TRANSFER_DETAILED.has(detailed) : false,
-  };
+/** One full cursor walk against /transactions/sync, gathering all pages of
+ *  added / modified / removed. Throws on API errors (including Plaid's
+ *  MUTATION_DURING_PAGINATION) — callers keep the old cursor and retry on the
+ *  next request, which is safe because applying a delta is idempotent. */
+async function syncFromPlaid(
+  client: PlaidApi,
+  token: string,
+  cursor: string | null,
+  maxPages: number,
+): Promise<SyncDelta> {
+  const added: PlaidTxn[] = [];
+  const modified: PlaidTxn[] = [];
+  const removed: string[] = [];
+  let next: string | undefined = cursor ?? undefined;
+  let finalCursor = cursor ?? "";
+  let completed = false;
+  for (let page = 0; page < maxPages; page += 1) {
+    const res = await client.transactionsSync({
+      access_token: token,
+      cursor: next,
+      count: 500,
+    });
+    added.push(...res.data.added);
+    modified.push(...res.data.modified);
+    removed.push(...res.data.removed.map((r) => `plaid_${r.transaction_id}`));
+    next = res.data.next_cursor;
+    finalCursor = res.data.next_cursor;
+    if (!res.data.has_more) {
+      completed = true;
+      break;
+    }
+  }
+  return { added, modified, removed, cursor: finalCursor, completed };
 }
 
-export async function getPlaidTransactions(): Promise<Transaction[]> {
+export interface TransactionsResult {
+  transactions: Transaction[];
+  /** True when serving a partial live fetch because the store was unavailable
+   *  — callers should avoid caching a degraded dataset for the full TTL. */
+  degraded: boolean;
+}
+
+export async function getPlaidTransactions(): Promise<TransactionsResult> {
   const token = await readAccessToken();
   const client = getPlaidClient();
-  if (!token || !client) return [];
+  if (!token || !client) return { transactions: [], degraded: false };
+
+  // Without postgres (local dev): fresh live fetch each request, as before.
+  if (!txnStoreEnabled()) {
+    try {
+      const { added } = await syncFromPlaid(client, token, null, 5);
+      return { transactions: added.map(toTransaction), degraded: false };
+    } catch (err) {
+      console.error("Plaid transactions fetch failed:", err);
+      return { transactions: [], degraded: true };
+    }
+  }
+
+  // Persistent path: pull only the delta since the stored cursor, apply it
+  // atomically, then serve from the store. History accumulates beyond Plaid's
+  // ~90-day default, so weekly/monthly/yearly reports stay complete.
+  try {
+    const cursor = await readSyncCursor();
+    // 500 pages × 500 txns is far beyond any personal account — purely a
+    // runaway guard. An incomplete walk is never persisted (cursor contract).
+    const delta = await syncFromPlaid(client, token, cursor, 500);
+    if (!delta.completed) {
+      console.error(
+        "Plaid sync page cap hit with has_more=true — not persisting; will resume from the prior cursor",
+      );
+    } else if (delta.cursor && delta.cursor !== (cursor ?? "")) {
+      // Dedupe: the same transaction can appear in both added and modified in
+      // one walk; keep one row per id with the modified (newer) state winning,
+      // so a duplicate id can't abort the multi-row upsert.
+      const byId = new Map<string, PlaidTxn>();
+      for (const t of delta.added) byId.set(t.transaction_id, t);
+      for (const t of delta.modified) byId.set(t.transaction_id, t);
+      const applied = await applySyncDelta(
+        [...byId.values()].map(toTransaction),
+        delta.removed,
+        delta.cursor,
+        cursor,
+      );
+      if (!applied) {
+        console.warn("Plaid sync round discarded (cursor changed underneath — wipe or concurrent sync)");
+      }
+    }
+  } catch (err) {
+    // Sync trouble (Plaid or DB) → serve what we already have; next request retries.
+    console.error("Plaid incremental sync failed; serving stored data:", err);
+  }
 
   try {
-    const added: PlaidTxn[] = [];
-    let cursor: string | undefined = undefined;
-    for (let i = 0; i < 5; i += 1) {
-      const res = await client.transactionsSync({
-        access_token: token,
-        cursor,
-      });
-      added.push(...res.data.added);
-      cursor = res.data.next_cursor;
-      if (!res.data.has_more) break;
-    }
-    return added.map(toTransaction);
+    return { transactions: await readStoredTransactions(), degraded: false };
   } catch (err) {
-    console.error("Plaid transactions fetch failed:", err);
-    return [];
+    console.error("Transaction store read failed; falling back to live fetch:", err);
+    try {
+      const { added } = await syncFromPlaid(client, token, null, 5);
+      return { transactions: added.map(toTransaction), degraded: true };
+    } catch (err2) {
+      console.error("Plaid transactions fetch failed:", err2);
+      return { transactions: [], degraded: true };
+    }
   }
 }
 

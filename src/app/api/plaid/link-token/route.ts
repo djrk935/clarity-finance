@@ -28,6 +28,9 @@ export async function POST() {
       client_name: "Clarity",
       products: [Products.Transactions],
       optional_products: optionalProducts,
+      // Backfill up to 2 years of history on new links (default is ~90 days,
+      // which silently truncates the yearly reports). Fixed at link time.
+      transactions: { days_requested: 730 },
       country_codes: [CountryCode.Us],
       language: "en",
     });

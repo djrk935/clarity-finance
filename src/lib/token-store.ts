@@ -5,8 +5,9 @@
  *     restarts on ephemeral hosts like DigitalOcean App Platform).
  *   - otherwise → a local .plaid/token.json file (handy for local dev).
  *
- *  Only the access token needs to persist; all financial data is fetched live
- *  from Plaid on each request. */
+ *  Balances/liabilities are fetched live from Plaid on each request;
+ *  transactions are additionally persisted + synced incrementally in
+ *  production (see data/txn-store.ts). */
 
 import { promises as fs } from "fs";
 import path from "path";
@@ -80,11 +81,23 @@ async function pgEnsure(): Promise<void> {
 }
 async function pgSave(accessToken: string, itemId: string): Promise<void> {
   await pgEnsure();
-  await pool().query("DELETE FROM plaid_item");
-  await pool().query(
-    "INSERT INTO plaid_item (access_token, item_id) VALUES ($1, $2)",
-    [accessToken, itemId],
-  );
+  // One transaction: an INSERT failure must not leave the old token deleted
+  // (a half-state no retry could heal — the bank would just be unlinked).
+  const client = await pool().connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("DELETE FROM plaid_item");
+    await client.query(
+      "INSERT INTO plaid_item (access_token, item_id) VALUES ($1, $2)",
+      [accessToken, itemId],
+    );
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 async function pgRead(): Promise<string | null> {
   await pgEnsure();
