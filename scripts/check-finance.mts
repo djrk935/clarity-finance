@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import * as F from "../src/lib/finance.ts";
 import { generateInsights } from "../src/lib/insights.ts";
+import { renderDigest } from "../src/lib/digest.ts";
 import { toTransaction } from "../src/lib/data/plaid-map.ts";
 import {
   accounts,
@@ -602,6 +603,58 @@ check("insights: budget alerts can't crowd out utilization / low safe-to-spend",
   assert.ok(ids.includes("utilization"));
   assert.ok(ids.includes("low-safe"));
   assert.equal(ids.filter((id) => id.startsWith("budget-")).length, 2);
+});
+
+check("renderDigest carries the snapshot's numbers verbatim", () => {
+  const { subject, text } = renderDigest({
+    userName: "Dayan",
+    safeToSpend: 1240.5,
+    totalLiquidity: 8450,
+    spendable: 2650,
+    upcomingBillsTotal: 420,
+    upcomingBillsCount: 8,
+    billWindowDays: 14,
+    nextBill: { name: "Rent", amount: 1200, dueDate: "2026-07-01T00:00:00.000Z" },
+    buffer: 200,
+    savedThisMonth: 1759,
+    incomeThisMonth: 2100,
+    spentThisMonth: 341,
+    topCategories: [{ category: "Dining", total: 205 }],
+    topMerchants: [],
+    budgets: [
+      { category: "Dining", limit: 150, spent: 205, pct: 137, projected: 256, tone: "over" },
+    ],
+    forecast: {
+      dailySafeToSpend: 124.05,
+      avgDailySpend: 24.36,
+      runwayDays: 40,
+      monthsOfRunway: 8.45,
+    },
+    rescue: {
+      totalDebt: 6400,
+      paid: 2100,
+      remaining: 4300,
+      pct: 33,
+      payoffDate: "April 2027",
+      monthsAhead: 2,
+      monthlyPayment: 400,
+      projectedMonths: 9,
+    },
+    utilization: { card: "Chase Sapphire", pct: 34, balance: 1190, limit: 3500 },
+  });
+  assert.equal(subject, "Clarity digest: $1,241 safe to spend");
+  for (const expected of [
+    "SAFE TO SPEND: $1,240.50",
+    "8 bills totaling $420 due in the next 14 days",
+    "Next bill: Rent $1,200.00 on Jul 1",
+    "In $2,100 · out $341 · net $1,759",
+    "Dining: $205 / $150 (137%) — OVER by $55.00",
+    "$4,300 remaining (33% paid off) · debt-free by April 2027",
+    "Chase Sapphire utilization: 34%",
+    "~40 days of cash at the recent pace · 8.45 months of expenses on hand",
+  ]) {
+    assert.ok(text.includes(expected), `digest missing: ${expected}\n---\n${text}`);
+  }
 });
 
 /* --- Plaid → domain mapping (plaid-map.ts) --- */
