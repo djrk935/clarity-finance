@@ -44,9 +44,12 @@ function toForm(s: Settings): FormState {
 export function SettingsForm({
   initial,
   categorySuggestions = [],
+  suggestedLimits = {},
 }: {
   initial: Settings;
   categorySuggestions?: string[];
+  /** Trailing-3-month average spend per category (lowercased keys). */
+  suggestedLimits?: Record<string, number>;
 }) {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(toForm(initial));
@@ -195,40 +198,54 @@ export function SettingsForm({
             <option key={c} value={c} />
           ))}
         </datalist>
-        {form.budgets.map((b, i) => (
-          <div key={i} style={{ display: "flex", gap: 8, marginTop: 8 }}>
-            <div className="ainput" style={{ marginTop: 0, flex: 2 }}>
-              <input
-                list="budget-categories"
-                placeholder="Category (e.g. Dining)"
-                aria-label={`Budget ${i + 1} category`}
-                value={b.category}
-                onChange={(e) => setBudget(i, { category: e.target.value })}
-              />
+        {form.budgets.map((b, i) => {
+          const suggestion = suggestedLimits[b.category.trim().toLowerCase()];
+          return (
+            <div key={i} style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <div className="ainput" style={{ marginTop: 0, flex: 2 }}>
+                <input
+                  list="budget-categories"
+                  placeholder="Category (e.g. Dining)"
+                  aria-label={`Budget ${i + 1} category`}
+                  value={b.category}
+                  onChange={(e) => setBudget(i, { category: e.target.value })}
+                />
+              </div>
+              <div className="ainput" style={{ marginTop: 0, flex: 1 }}>
+                <span style={{ color: "var(--muted-2)" }}>$</span>
+                <input
+                  type="number"
+                  min={1}
+                  step={10}
+                  inputMode="decimal"
+                  placeholder="Limit"
+                  aria-label={`Budget ${i + 1} monthly limit`}
+                  value={b.limit}
+                  onChange={(e) => setBudget(i, { limit: e.target.value })}
+                />
+              </div>
+              {suggestion !== undefined && Number(b.limit) !== suggestion && (
+                <button
+                  type="button"
+                  className="nchip"
+                  onClick={() => setBudget(i, { limit: String(suggestion) })}
+                  title="Your average over the last 3 full months"
+                  aria-label={`Use suggested ${b.category} limit of $${suggestion} (3-month average)`}
+                >
+                  ≈ ${suggestion}
+                </button>
+              )}
+              <button
+                type="button"
+                className="iconbtn"
+                onClick={() => removeBudget(i)}
+                aria-label={`Remove budget ${b.category || i + 1}`}
+              >
+                <X size={15} aria-hidden />
+              </button>
             </div>
-            <div className="ainput" style={{ marginTop: 0, flex: 1 }}>
-              <span style={{ color: "var(--muted-2)" }}>$</span>
-              <input
-                type="number"
-                min={1}
-                step={10}
-                inputMode="decimal"
-                placeholder="Limit"
-                aria-label={`Budget ${i + 1} monthly limit`}
-                value={b.limit}
-                onChange={(e) => setBudget(i, { limit: e.target.value })}
-              />
-            </div>
-            <button
-              type="button"
-              className="iconbtn"
-              onClick={() => removeBudget(i)}
-              aria-label={`Remove budget ${b.category || i + 1}`}
-            >
-              <X size={15} aria-hidden />
-            </button>
-          </div>
-        ))}
+          );
+        })}
         <button
           type="button"
           className="nchip"

@@ -555,6 +555,19 @@ check("alertsToFire: fires once per key, respects threshold, re-arms monthly", (
   );
 });
 
+check("suggestedBudgetLimit averages the trailing 3 full months, tidied to $10", () => {
+  // now = Jun 24 → the window is Mar+Apr+May; June spend must not count.
+  const txns = [
+    { id: "s1", date: "2026-03-10T00:00:00.000Z", description: "a", amount: -90, category: "Dining" },
+    { id: "s2", date: "2026-04-10T00:00:00.000Z", description: "b", amount: -120, category: "Dining" },
+    { id: "s3", date: "2026-05-31T00:00:00.000Z", description: "c", amount: -150, category: "Dining" }, // month-end lands in-window
+    { id: "s4", date: "2026-06-05T00:00:00.000Z", description: "d", amount: -999, category: "Dining" }, // current month excluded
+    { id: "s5", date: "2026-02-28T00:00:00.000Z", description: "e", amount: -999, category: "Dining" }, // too old
+  ];
+  assert.equal(F.suggestedBudgetLimit(txns, "Dining", now), 120); // (90+120+150)/3 = 120
+  assert.equal(F.suggestedBudgetLimit(txns, "Travel", now), 0); // no history
+});
+
 check("insights: budget alerts can't crowd out utilization / low safe-to-spend", () => {
   // Worst case: high utilization + 3 over-budget categories + a pacing warn +
   // low safe-to-spend. Budget alerts are capped at 2 so both safety-critical

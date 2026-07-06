@@ -395,6 +395,25 @@ export function budgetProgress(
     .sort((a, b) => b.pct - a.pct);
 }
 
+/** Suggested monthly budget limit for a category: the average of its spend
+ *  over the trailing 3 FULL calendar months (the current partial month would
+ *  bias the number low), rounded to a tidy $10. 0 = not enough history. */
+export function suggestedBudgetLimit(
+  transactions: Transaction[],
+  category: string,
+  now: Date = new Date(),
+): number {
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  let total = 0;
+  for (let i = 1; i <= 3; i++) {
+    const from = new Date(Date.UTC(y, m - i, 1));
+    const to = new Date(Date.UTC(y, m - i + 1, 0)); // last day of that month
+    total += spendByCategory(transactions, category, from, to);
+  }
+  return Math.round(total / 3 / 10) * 10;
+}
+
 /* ---------- CSV export ---------- */
 
 function csvField(v: string): string {
