@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { PieChart, Store, BarChart3 } from "lucide-react";
-import type { MonthlyPoint, PeriodKey, PeriodSummary } from "@/lib/types";
+import type { MonthlyPoint, NetWorthPoint, PeriodKey, PeriodSummary } from "@/lib/types";
 import { formatCurrency } from "@/lib/finance";
+import { NetWorthChart } from "./NetWorthChart";
 
 const PERIODS: { key: PeriodKey; label: string }[] = [
   { key: "week", label: "Week" },
@@ -112,9 +113,11 @@ function TrendChart({ trend }: { trend: MonthlyPoint[] }) {
 export function ReportsView({
   summaries,
   trend,
+  netWorth,
 }: {
   summaries: Record<PeriodKey, PeriodSummary>;
   trend: MonthlyPoint[];
+  netWorth: NetWorthPoint[];
 }) {
   const [key, setKey] = useState<PeriodKey>("month");
   const summary = summaries[key];
@@ -178,6 +181,7 @@ export function ReportsView({
 
       <div className="grid-main">
         <div className="col">
+          <NetWorthChart history={netWorth} />
           <CategoryBreakdown summary={summary} />
         </div>
         <div className="col">

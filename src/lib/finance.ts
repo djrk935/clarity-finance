@@ -146,6 +146,20 @@ export function debtPayoffProgress(debts: Debt[]): {
   return { total, remaining, paid, pct };
 }
 
+/* ---------- net worth ---------- */
+
+/** Point-in-time net worth from the same numbers the dashboard shows:
+ *  liquidity (depository balances) minus outstanding debt. The history store
+ *  persists exactly this shape, so the chart can never drift from the KPIs. */
+export function netWorth(
+  accounts: Account[],
+  debts: Debt[],
+): { liquidity: number; debt: number; net: number } {
+  const liquidity = totalLiquidity(accounts);
+  const debt = debtPayoffProgress(debts).remaining;
+  return { liquidity, debt, net: round2(liquidity - debt) };
+}
+
 /* ---------- spending trends ---------- */
 
 /** Total outflow for a category within [from, to] (inclusive by day). */

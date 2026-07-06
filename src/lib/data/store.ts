@@ -17,8 +17,9 @@ import {
 } from "./plaid-source";
 import { getCachedRaw, setCachedRaw } from "./cache";
 import { loadSettings } from "./settings-store";
+import { recordNetWorthSnapshot } from "./history-store";
 import { readAccessToken } from "../plaid";
-import { cashflowFromTransactions, detectRecurringBills } from "../finance";
+import { cashflowFromTransactions, detectRecurringBills, netWorth } from "../finance";
 import type { DashboardData, FinancialSnapshot, RawData } from "../types";
 
 const EMPTY: RawData = {
@@ -61,7 +62,16 @@ async function getRealRaw(now: Date): Promise<RawData> {
   };
   // Don't pin a degraded (partial fallback) dataset for the full cache TTL —
   // let the next request retry the store right away.
-  if (!degraded) setCachedRaw(token, raw);
+  if (!degraded) {
+    setCachedRaw(token, raw);
+    // Record today's net-worth point (one per UTC day) now that a full sync
+    // completed. History is best-effort: never let it break the request.
+    try {
+      await recordNetWorthSnapshot(netWorth(accounts, debts), now);
+    } catch (err) {
+      console.error("Net-worth snapshot failed:", err);
+    }
+  }
   return raw;
 }
 

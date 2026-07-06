@@ -1,5 +1,6 @@
 import { PieChart } from "lucide-react";
 import { getDashboardData } from "@/lib/data/store";
+import { readNetWorthHistory } from "@/lib/data/history-store";
 import { summarizePeriod, monthlyTrend } from "@/lib/finance";
 import { PageHead } from "@/components/dashboard/PageHead";
 import { ReportsView } from "@/components/dashboard/ReportsView";
@@ -13,6 +14,8 @@ const PERIOD_KEYS: PeriodKey[] = ["week", "month", "last-month", "year"];
 export default async function ReportsPage() {
   if (!(await isAuthed())) return null;
   const d = await getDashboardData();
+  // History is best-effort decoration — a store hiccup must not 500 the page.
+  const netWorthHistory = await readNetWorthHistory().catch(() => []);
   const now = new Date();
 
   // Compute every period server-side so the toggle is instant and there's no
@@ -42,7 +45,7 @@ export default async function ReportsPage() {
           </p>
         </section>
       ) : (
-        <ReportsView summaries={summaries} trend={trend} />
+        <ReportsView summaries={summaries} trend={trend} netWorth={netWorthHistory} />
       )}
     </>
   );

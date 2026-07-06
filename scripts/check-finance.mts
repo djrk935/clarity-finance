@@ -66,6 +66,14 @@ check("debt payoff progress is 33%", () => {
   assert.equal(p.pct, 33);
 });
 
+check("netWorth = liquidity − outstanding debt (same numbers as the KPIs)", () => {
+  const nw = F.netWorth(accounts, debts);
+  assert.equal(nw.liquidity, F.totalLiquidity(accounts)); // 8450
+  assert.equal(nw.debt, F.debtPayoffProgress(debts).remaining); // 4300
+  assert.deepEqual(nw, { liquidity: 8450, debt: 4300, net: 4150 });
+  assert.deepEqual(F.netWorth([], []), { liquidity: 0, debt: 0, net: 0 });
+});
+
 check("dining trend is down 12% week over week", () => {
   const t = F.categoryTrend(getTransactions(now), "Dining", now);
   assert.equal(t.thisWeek, 96);

@@ -22,6 +22,16 @@ export interface BudgetStatus {
   tone: "good" | "warn" | "over";
 }
 
+/** One captured net-worth snapshot (at most one per UTC calendar day). */
+export interface NetWorthPoint {
+  /** UTC calendar date, "YYYY-MM-DD". */
+  date: string;
+  liquidity: number;
+  debt: number;
+  /** liquidity − debt, the charted value. */
+  net: number;
+}
+
 /** User-configurable settings that shape the numbers (persisted). */
 export interface Settings {
   userName: string;
