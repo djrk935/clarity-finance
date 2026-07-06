@@ -6,13 +6,17 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Loose parse (type-coercion only). Range clamping/rounding is owned by
-// normalize() in the settings store, so it applies to every write path.
+// normalize()/sanitizeBudgets in the settings store, applied on every write.
 const BodySchema = z.object({
   userName: z.string().optional(),
   buffer: z.coerce.number().optional(),
   savingsGoal: z.coerce.number().optional(),
   extraDebtPayment: z.coerce.number().optional(),
   billWindowDays: z.coerce.number().optional(),
+  budgets: z
+    .array(z.object({ category: z.string(), limit: z.coerce.number() }))
+    .max(100)
+    .optional(),
 });
 
 export async function GET() {

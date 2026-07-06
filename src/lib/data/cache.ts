@@ -13,19 +13,26 @@ import type { RawData } from "../types";
 
 const TTL_MS = 60_000;
 
-let cached: { token: string; at: number; raw: RawData } | null = null;
+// Kept on globalThis (like the pg pool): Next bundles route handlers and pages
+// as separate module graphs, so a module-level variable would exist once per
+// bundle — and the Sync/connect cache-bust from an API route would never reach
+// the copy the pages read. globalThis is shared across bundles in one process.
+const g = globalThis as unknown as {
+  clarityRawCache?: { token: string; at: number; raw: RawData } | null;
+};
 
 export function getCachedRaw(token: string, now: number = Date.now()): RawData | null {
+  const cached = g.clarityRawCache;
   if (!cached || cached.token !== token) return null;
   if (now - cached.at > TTL_MS) return null;
   return cached.raw;
 }
 
 export function setCachedRaw(token: string, raw: RawData, now: number = Date.now()): void {
-  cached = { token, at: now, raw };
+  g.clarityRawCache = { token, at: now, raw };
 }
 
 /** Drop the cache so the next load re-fetches from Plaid. */
 export function clearDataCache(): void {
-  cached = null;
+  g.clarityRawCache = null;
 }

@@ -8,6 +8,7 @@ import { RescuePlan } from "@/components/dashboard/RescuePlan";
 import { InsightsPanel } from "@/components/dashboard/InsightsPanel";
 import { AccountsPanel } from "@/components/dashboard/AccountsPanel";
 import { BillsPanel } from "@/components/dashboard/BillsPanel";
+import { BudgetsPanel } from "@/components/dashboard/BudgetsPanel";
 import { AdvisorChat } from "@/components/dashboard/AdvisorChat";
 
 export const dynamic = "force-dynamic";
@@ -53,8 +54,9 @@ export default async function DashboardPage() {
           <BillsPanel bills={d.subscriptions} />
         </div>
         <div className="col">
-          <RescuePlan rescue={d.rescue} />
           <InsightsPanel insights={d.insights} />
+          <BudgetsPanel budgets={d.budgets} />
+          <RescuePlan rescue={d.rescue} />
           <AccountsPanel accounts={d.accounts} />
         </div>
       </div>

@@ -4,6 +4,8 @@
 import type {
   Account,
   Bill,
+  Budget,
+  BudgetStatus,
   Debt,
   Transaction,
   SpendingTrend,
@@ -309,6 +311,74 @@ export function formatMonthYear(date: Date): string {
     year: "numeric",
     timeZone: "UTC",
   }).format(date);
+}
+
+/* ---------- budgets ---------- */
+
+const MAX_BUDGETS = 50;
+
+/** Validate/clean stored or submitted budgets: trims and bounds the category,
+ *  clamps the limit to (0, $1M], drops empties/zero-limits, and dedupes by
+ *  category (case-insensitive, last entry wins). Single source of truth for
+ *  what a valid budget list looks like, applied on every read and write. */
+export function sanitizeBudgets(raw: unknown): Budget[] {
+  if (!Array.isArray(raw)) return [];
+  const byKey = new Map<string, Budget>();
+  for (const entry of raw) {
+    const e = (entry ?? {}) as { category?: unknown; limit?: unknown };
+    const category =
+      typeof e.category === "string" ? e.category.trim().slice(0, 60) : "";
+    const limit = Number(e.limit);
+    if (!category || !Number.isFinite(limit) || limit <= 0) continue;
+    byKey.set(category.toLowerCase(), {
+      category,
+      limit: round2(Math.min(1_000_000, limit)),
+    });
+  }
+  return [...byKey.values()].slice(0, MAX_BUDGETS);
+}
+
+/** Evaluate budgets against the current month's spending, worst first.
+ *  `projected` is a straight-line pace estimate (spend so far ÷ days elapsed ×
+ *  days in month); tone turns "warn" when the pace would exceed the limit and
+ *  "over" once the limit is actually crossed. */
+export function budgetProgress(
+  budgets: Budget[],
+  transactions: Transaction[],
+  now: Date = new Date(),
+): BudgetStatus[] {
+  if (budgets.length === 0) return [];
+  const { from, to } = periodRange("month", now);
+  const spendByCat = new Map(
+    categorySpendInRange(transactions, from, to).map((c) => [
+      c.category.toLowerCase(),
+      c.total,
+    ]),
+  );
+  const dayOfMonth = now.getUTCDate();
+  const daysInMonth = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+
+  // A straight-line projection is meaningless in the first few days of a
+  // month (one dinner on the 1st projects ×30) — hold pace warnings until
+  // there's enough of the month to extrapolate from.
+  const paceReliable = dayOfMonth >= 5;
+
+  return budgets
+    .map((b) => {
+      const spent = round2(spendByCat.get(b.category.toLowerCase()) ?? 0);
+      const pct = Math.round((spent / b.limit) * 100);
+      const projected = round2((spent / dayOfMonth) * daysInMonth);
+      const tone: BudgetStatus["tone"] =
+        spent > b.limit
+          ? "over"
+          : paceReliable && projected > b.limit
+            ? "warn"
+            : "good";
+      return { category: b.category, limit: b.limit, spent, pct, projected, tone };
+    })
+    .sort((a, b) => b.pct - a.pct);
 }
 
 /* ---------- payoff strategy ---------- */

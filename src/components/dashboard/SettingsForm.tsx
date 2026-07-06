@@ -2,14 +2,20 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check } from "lucide-react";
+import { Check, Plus, X } from "lucide-react";
 import type { Settings } from "@/lib/types";
 
 type NumKey = "buffer" | "savingsGoal" | "extraDebtPayment" | "billWindowDays";
 
+/** One editable budget row (strings while editing; coerced on submit). */
+interface BudgetRow {
+  category: string;
+  limit: string;
+}
+
 /** Form state holds raw strings so numeric fields can be cleared/edited freely
  *  (no snap-to-zero); values are coerced on submit. */
-type FormState = { userName: string } & Record<NumKey, string>;
+type FormState = { userName: string; budgets: BudgetRow[] } & Record<NumKey, string>;
 
 function toForm(s: Settings): FormState {
   return {
@@ -18,18 +24,43 @@ function toForm(s: Settings): FormState {
     savingsGoal: String(s.savingsGoal),
     extraDebtPayment: String(s.extraDebtPayment),
     billWindowDays: String(s.billWindowDays),
+    budgets: s.budgets.map((b) => ({ category: b.category, limit: String(b.limit) })),
   };
 }
 
-export function SettingsForm({ initial }: { initial: Settings }) {
+export function SettingsForm({
+  initial,
+  categorySuggestions = [],
+}: {
+  initial: Settings;
+  categorySuggestions?: string[];
+}) {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(toForm(initial));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
 
-  function set(k: keyof FormState, v: string) {
+  function set(k: "userName" | NumKey, v: string) {
     setForm((f) => ({ ...f, [k]: v }));
+    setSaved(false);
+  }
+
+  function setBudget(i: number, patch: Partial<BudgetRow>) {
+    setForm((f) => ({
+      ...f,
+      budgets: f.budgets.map((b, j) => (j === i ? { ...b, ...patch } : b)),
+    }));
+    setSaved(false);
+  }
+
+  function addBudget() {
+    setForm((f) => ({ ...f, budgets: [...f.budgets, { category: "", limit: "" }] }));
+    setSaved(false);
+  }
+
+  function removeBudget(i: number) {
+    setForm((f) => ({ ...f, budgets: f.budgets.filter((_, j) => j !== i) }));
     setSaved(false);
   }
 
@@ -40,11 +71,15 @@ export function SettingsForm({ initial }: { initial: Settings }) {
     setSaved(false);
 
     // Coerce numbers; omit a blank name so it keeps the current value.
+    // Blank/invalid budget rows are dropped here (and re-validated server-side).
     const payload: Record<string, unknown> = {
       buffer: Number(form.buffer) || 0,
       savingsGoal: Number(form.savingsGoal) || 0,
       extraDebtPayment: Number(form.extraDebtPayment) || 0,
       billWindowDays: Number(form.billWindowDays) || 0,
+      budgets: form.budgets
+        .map((b) => ({ category: b.category.trim(), limit: Number(b.limit) || 0 }))
+        .filter((b) => b.category && b.limit > 0),
     };
     if (form.userName.trim()) payload.userName = form.userName.trim();
 
@@ -131,6 +166,62 @@ export function SettingsForm({ initial }: { initial: Settings }) {
             onChange={(e) => set("billWindowDays", e.target.value)}
           />
         </div>
+      </div>
+
+      <div className="field">
+        <label>Monthly category budgets</label>
+        <div className="desc">
+          Spending caps per category — the dashboard tracks your pace and warns
+          when you&apos;re trending over.
+        </div>
+        <datalist id="budget-categories">
+          {categorySuggestions.map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
+        {form.budgets.map((b, i) => (
+          <div key={i} style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <div className="ainput" style={{ marginTop: 0, flex: 2 }}>
+              <input
+                list="budget-categories"
+                placeholder="Category (e.g. Dining)"
+                aria-label={`Budget ${i + 1} category`}
+                value={b.category}
+                onChange={(e) => setBudget(i, { category: e.target.value })}
+              />
+            </div>
+            <div className="ainput" style={{ marginTop: 0, flex: 1 }}>
+              <span style={{ color: "var(--muted-2)" }}>$</span>
+              <input
+                type="number"
+                min={1}
+                step={10}
+                inputMode="decimal"
+                placeholder="Limit"
+                aria-label={`Budget ${i + 1} monthly limit`}
+                value={b.limit}
+                onChange={(e) => setBudget(i, { limit: e.target.value })}
+              />
+            </div>
+            <button
+              type="button"
+              className="iconbtn"
+              onClick={() => removeBudget(i)}
+              aria-label={`Remove budget ${b.category || i + 1}`}
+            >
+              <X size={15} aria-hidden />
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          className="nchip"
+          style={{ marginTop: 10 }}
+          onClick={addBudget}
+        >
+          <Plus className="ic" size={14} aria-hidden />
+          Add budget
+        </button>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>

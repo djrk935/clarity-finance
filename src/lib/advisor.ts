@@ -36,6 +36,18 @@ export function buildSystemPrompt(s: FinancialSnapshot): string {
     s.forecast.runwayDays != null
       ? `${s.forecast.runwayDays} days at the recent burn rate`
       : "unknown";
+  const budgets =
+    s.budgets.length > 0
+      ? s.budgets
+          .map(
+            (b) =>
+              `${b.category} ${formatCurrency(b.spent)} of ${formatCurrency(
+                b.limit,
+                false,
+              )} (${b.pct}%, ${b.tone === "over" ? "OVER" : b.tone === "warn" ? "pacing over" : "on track"})`,
+          )
+          .join("; ")
+      : "none set";
   return [
     "You are Clarity, a calm, encouraging financial advisor inside a money-rescue app.",
     "Be concise (2–4 sentences), specific, and reference the user's real numbers.",
@@ -52,6 +64,7 @@ export function buildSystemPrompt(s: FinancialSnapshot): string {
     `Top spending categories this month: ${categories}`,
     `Biggest merchants this month: ${merchants}`,
     `Avg daily spend (14d): ${formatCurrency(s.forecast.avgDailySpend)}; cash runway: ${runway}`,
+    `Monthly budgets: ${budgets}`,
     `Upcoming bills (next ${pluralize(s.billWindowDays, "day")}): ${formatCurrency(s.upcomingBillsTotal)} across ${pluralize(s.upcomingBillsCount, "bill")}`,
     s.nextBill
       ? `Next bill: ${s.nextBill.name} ${formatCurrency(s.nextBill.amount)}`
@@ -72,6 +85,7 @@ type Intent =
   | "spending"
   | "income"
   | "merchant"
+  | "budget"
   | "summary"
   | "greeting"
   | "fallback";
@@ -81,6 +95,7 @@ function classify(message: string): Intent {
   if (/\b(hi|hey|hello|yo|sup)\b/.test(m) && m.trim().length < 16) return "greeting";
   // Check "safe to spend" before the broader spending patterns below.
   if (/(safe to spend|safe-to-spend|safe spend|afford|discretionary)/.test(m)) return "safe";
+  if (/(budget|over ?spend|spending limit)/.test(m)) return "budget";
   // Explicit "income vs spending" comparison → income branch (it reports net).
   if (
     /(earn|income|made?|making|bringing in).*(vs|versus|compared|and).*(spend|spent|spending)/.test(m) ||
@@ -204,6 +219,23 @@ export function ruleBasedReply(
           ? "You're cash-flow positive — nice."
           : "You're spending more than you're bringing in this month — worth easing back."
       }`;
+    }
+
+    case "budget": {
+      if (s.budgets.length === 0)
+        return `You haven't set any budgets yet — add per-category monthly limits in Settings and I'll track your pace against them.`;
+      const worst = s.budgets[0];
+      const summary = s.budgets
+        .slice(0, 3)
+        .map((b) => `${b.category} ${formatCurrency(b.spent)}/${formatCurrency(b.limit, false)} (${b.pct}%)`)
+        .join(", ");
+      const verdict =
+        worst.tone === "over"
+          ? `You're ${formatCurrency(worst.spent - worst.limit)} over on ${worst.category} — worth pausing that category for the rest of the month.`
+          : worst.tone === "warn"
+            ? `${worst.category} is pacing over (projected ${formatCurrency(worst.projected)} vs a ${formatCurrency(worst.limit, false)} limit).`
+            : `Everything is on track — nice.`;
+      return `Budgets this month: ${summary}. ${verdict}`;
     }
 
     case "summary":

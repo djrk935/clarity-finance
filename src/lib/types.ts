@@ -2,6 +2,26 @@
  *  source maps into these, the pure finance engine computes over them, and the
  *  UI renders them — so a different data source could be swapped in untouched. */
 
+/** A monthly spending cap for one category. */
+export interface Budget {
+  category: string;
+  /** Monthly limit in dollars (> 0). */
+  limit: number;
+}
+
+/** A budget evaluated against the current month's spending. */
+export interface BudgetStatus {
+  category: string;
+  limit: number;
+  spent: number;
+  /** Percent of the limit spent so far (rounded). */
+  pct: number;
+  /** Straight-line projection of month-end spend at the current pace. */
+  projected: number;
+  /** good = on track · warn = projected to exceed · over = already exceeded. */
+  tone: "good" | "warn" | "over";
+}
+
 /** User-configurable settings that shape the numbers (persisted). */
 export interface Settings {
   userName: string;
@@ -13,6 +33,8 @@ export interface Settings {
   extraDebtPayment: number;
   /** How many days ahead the "upcoming bills" window looks. */
   billWindowDays: number;
+  /** Per-category monthly spending caps. */
+  budgets: Budget[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -21,6 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   savingsGoal: 0,
   extraDebtPayment: 0,
   billWindowDays: 14,
+  budgets: [],
 };
 
 export type AccountType = "checking" | "savings" | "cash" | "credit";
@@ -201,6 +224,7 @@ export interface DashboardData {
   subscriptions: Bill[];
   spendingByCategory: CategorySpend[];
   totalSpentThisMonth: number;
+  budgets: BudgetStatus[];
   forecast: Forecast;
   metrics: Metrics;
   rescue: RescuePlan;
@@ -229,6 +253,8 @@ export interface FinancialSnapshot {
   topCategories: CategorySpend[];
   /** Biggest merchants this month (biggest first, up to ~5). */
   topMerchants: MerchantSpend[];
+  /** Budget statuses for the current month (worst first, up to ~6). */
+  budgets: BudgetStatus[];
   forecast: Forecast;
   rescue: RescuePlan;
   utilization: Utilization | null;

@@ -10,14 +10,18 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { pool } from "../token-store";
-import { round2 } from "../finance";
+import { round2, sanitizeBudgets } from "../finance";
 import { DEFAULT_SETTINGS, type Settings } from "../types";
 
 const isPostgres = (process.env.DATABASE_URL ?? "").startsWith("postgres");
 const SETTINGS_FILE = path.join(process.cwd(), ".plaid", "settings.json");
 const CACHE_TTL_MS = 30_000;
 
-let cache: { value: Settings; at: number } | null = null;
+// On globalThis so the cache is shared across Next's separate route/page
+// bundles — a save through the API must be visible to page renders at once.
+const g = globalThis as unknown as {
+  claritySettingsCache?: { value: Settings; at: number } | null;
+};
 
 /** Coerce + clamp one numeric field (strings, out-of-range, NaN all handled). */
 function clampNum(v: unknown, def: number, min: number, max: number): number {
@@ -42,6 +46,7 @@ function normalize(raw: unknown): Settings {
     billWindowDays: Math.round(
       clampNum(s.billWindowDays, DEFAULT_SETTINGS.billWindowDays, 1, 60),
     ),
+    budgets: sanitizeBudgets(s.budgets),
   };
 }
 
@@ -92,9 +97,10 @@ async function pgWrite(s: Settings): Promise<void> {
 export async function loadSettings(): Promise<Settings> {
   // Short TTL so a change made on another instance (Postgres mode) self-heals,
   // while still sparing a DB round-trip on rapid navigation.
+  const cache = g.claritySettingsCache;
   if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.value;
   const value = isPostgres ? await pgRead() : await fileRead();
-  cache = { value, at: Date.now() };
+  g.claritySettingsCache = { value, at: Date.now() };
   return value;
 }
 
@@ -104,6 +110,6 @@ export async function saveSettings(patch: Partial<Settings>): Promise<Settings> 
   const next = normalize({ ...current, ...patch });
   if (isPostgres) await pgWrite(next);
   else await fileWrite(next);
-  cache = { value: next, at: Date.now() };
+  g.claritySettingsCache = { value: next, at: Date.now() };
   return next;
 }

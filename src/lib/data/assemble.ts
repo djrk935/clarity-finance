@@ -64,6 +64,9 @@ export function assembleDashboard(
   // Net so far this month (inflows − outflows), same boundary convention.
   const savedThisMonth = F.round2(incomeThisMonth - totalSpentThisMonth);
 
+  // Monthly category budgets, evaluated against this month's spend.
+  const budgets = F.budgetProgress(settings.budgets, raw.transactions, now);
+
   // Forward-looking forecast / runway.
   const avgDaily = F.avgDailySpend(raw.transactions, now);
   const forecast: Forecast = {
@@ -91,6 +94,7 @@ export function assembleDashboard(
     utilization,
     spendingTrend,
     topCategory: spendingByCategory[0] ?? null,
+    budgets,
   });
 
   // Newest transactions first — the Activity browser and advisor read this.
@@ -109,6 +113,7 @@ export function assembleDashboard(
     ),
     spendingByCategory,
     totalSpentThisMonth,
+    budgets,
     forecast,
     metrics,
     rescue,
@@ -151,6 +156,7 @@ export function assembleSnapshot(
     spentThisMonth: d.totalSpentThisMonth,
     topCategories: d.spendingByCategory.slice(0, 5),
     topMerchants: F.topMerchants(raw.transactions, monthRange.from, monthRange.to, 5),
+    budgets: d.budgets.slice(0, 6),
     forecast: d.forecast,
     rescue: d.rescue,
     utilization: d.utilization,

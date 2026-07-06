@@ -3,6 +3,7 @@
 
 import assert from "node:assert/strict";
 import * as F from "../src/lib/finance.ts";
+import { generateInsights } from "../src/lib/insights.ts";
 import { toTransaction } from "../src/lib/data/plaid-map.ts";
 import {
   accounts,
@@ -249,6 +250,40 @@ check("current-month spend matches the period statement (same convention)", () =
   assert.equal(F.totalSpentThisMonth(getTransactions(now), now), s.spending);
 });
 
+check("month boundaries: the 1st and the last day both land in-month", () => {
+  // Pins the shared calendar basis: budgetProgress, totalSpentThisMonth, and
+  // daysUntilMonthEnd must agree on what "this month" is at both edges.
+  const jan31 = new Date("2026-01-31T12:00:00Z");
+  const txns = [
+    { id: "e1", date: "2026-01-01T00:00:00.000Z", description: "First", amount: -40, category: "Dining" },
+    { id: "e2", date: "2026-01-31T00:00:00.000Z", description: "Last", amount: -60, category: "Dining" },
+    { id: "e3", date: "2025-12-31T00:00:00.000Z", description: "Prev", amount: -500, category: "Dining" },
+  ];
+  assert.equal(F.totalSpentThisMonth(txns, jan31), 100); // Dec 31 excluded
+  const [s] = F.budgetProgress([{ category: "Dining", limit: 300 }], txns, jan31);
+  assert.equal(s.spent, 100); // same convention as totalSpentThisMonth
+  assert.equal(s.projected, 100); // day 31 of 31 → projection = actual
+  assert.equal(F.daysUntilMonthEnd(jan31), 1); // last day counts itself
+  assert.equal(F.daysUntilMonthEnd(new Date("2026-01-01T12:00:00Z")), 31);
+});
+
+check("the current month rolls over on UTC, not server-local time", () => {
+  // 01:00 UTC on Feb 1 is still Jan 31 in US timezones — every "this month"
+  // function must follow the UTC calendar regardless of where the process runs.
+  const utcFeb1 = new Date("2026-02-01T01:00:00Z");
+  const janTxn = [
+    { id: "z1", date: "2026-01-31T00:00:00.000Z", description: "Jan", amount: -80, category: "Dining" },
+  ];
+  assert.equal(
+    F.periodRange("month", utcFeb1).from.toISOString(),
+    "2026-02-01T00:00:00.000Z",
+  );
+  assert.equal(F.totalSpentThisMonth(janTxn, utcFeb1), 0); // January txn is out
+  const [s] = F.budgetProgress([{ category: "Dining", limit: 300 }], janTxn, utcFeb1);
+  assert.equal(s.spent, 0);
+  assert.equal(F.daysUntilMonthEnd(utcFeb1), 28); // Feb 2026, from the 1st
+});
+
 check("detectRecurringBills finds consistent monthly & weekly bills", () => {
   const at = (off: number) => iso(now, off);
   const txns = [
@@ -379,6 +414,138 @@ check("pluralize renders singular and plural units", () => {
   assert.equal(F.pluralize(14, "day"), "14 days");
   assert.equal(F.pluralize(1, "bill"), "1 bill");
   assert.equal(F.pluralize(0, "bill"), "0 bills");
+});
+
+/* --- budgets --- */
+
+check("sanitizeBudgets cleans, clamps, and dedupes", () => {
+  assert.deepEqual(F.sanitizeBudgets(null), []);
+  assert.deepEqual(F.sanitizeBudgets("nope"), []);
+  const out = F.sanitizeBudgets([
+    { category: "  Dining ", limit: 300 },
+    { category: "", limit: 100 }, // no category → dropped
+    { category: "Zero", limit: 0 }, // zero limit → dropped
+    { category: "Neg", limit: -5 }, // negative → dropped
+    { category: "Big", limit: 99_000_000 }, // clamped to 1M
+    { category: "dining", limit: 250 }, // dupe (case-insensitive) — last wins
+    { category: "Str", limit: "150" }, // numeric string coerced
+  ]);
+  assert.deepEqual(out, [
+    { category: "dining", limit: 250 },
+    { category: "Big", limit: 1_000_000 },
+    { category: "Str", limit: 150 },
+  ]);
+});
+
+check("budgetProgress: good / warn / over tones with pace projection", () => {
+  // Fixture: Dining spend this month = 205; now = Jun 24 of a 30-day month,
+  // so pace projection = 205 / 24 × 30 = 256.25.
+  const txns = getTransactions(now);
+  const statuses = F.budgetProgress(
+    [
+      { category: "Dining", limit: 300 }, // projected 256.25 < 300 → good
+      { category: "dining", limit: 150 }, // spent 205 > 150 → over (case-insensitive)
+      { category: "Travel", limit: 100 }, // no spend → good, 0%
+    ],
+    txns,
+    now,
+  );
+  // sanitize isn't applied here — budgetProgress takes them as given, so the
+  // duplicate category exercises independent evaluation.
+  const good = statuses.find((s) => s.limit === 300)!;
+  assert.equal(good.spent, 205);
+  assert.equal(good.pct, 68);
+  assert.equal(good.projected, 256.25);
+  assert.equal(good.tone, "good");
+  const over = statuses.find((s) => s.limit === 150)!;
+  assert.equal(over.tone, "over");
+  assert.equal(over.spent, 205);
+  const idle = statuses.find((s) => s.category === "Travel")!;
+  assert.equal(idle.spent, 0);
+  assert.equal(idle.tone, "good");
+  // worst first
+  assert.equal(statuses[0].limit, 150);
+});
+
+check("budgetProgress: pacing-over turns warn before the limit is crossed", () => {
+  const txns = getTransactions(now);
+  const [s] = F.budgetProgress([{ category: "Dining", limit: 250 }], txns, now);
+  // spent 205 ≤ 250 but projected 256.25 > 250 → warn
+  assert.equal(s.tone, "warn");
+  assert.equal(s.projected, 256.25);
+});
+
+check("budgetProgress holds pace warnings in the first days of a month", () => {
+  // Day 2: one $60 dinner projects to $900 against a $300 limit — but pace
+  // isn't reliable yet, so tone stays good (over still fires immediately).
+  const day2 = new Date("2026-06-02T09:00:00Z");
+  const txns = [
+    { id: "d1", date: "2026-06-01T12:00:00.000Z", description: "Dinner", amount: -60, category: "Dining" },
+  ];
+  const [early] = F.budgetProgress([{ category: "Dining", limit: 300 }], txns, day2);
+  assert.equal(early.projected, 900);
+  assert.equal(early.tone, "good"); // no pace warning yet
+  const [overEarly] = F.budgetProgress([{ category: "Dining", limit: 50 }], txns, day2);
+  assert.equal(overEarly.tone, "over"); // actually over → flags regardless
+});
+
+check("budgetProgress ignores transfers (uses the same spend convention)", () => {
+  const txns = [
+    ...getTransactions(now),
+    { id: "tt", date: iso(now, -2), description: "To savings", amount: -500, category: "Dining", transfer: true },
+  ];
+  const [s] = F.budgetProgress([{ category: "Dining", limit: 300 }], txns, now);
+  assert.equal(s.spent, 205); // transfer didn't count against the budget
+});
+
+check("insights: budget alerts can't crowd out utilization / low safe-to-spend", () => {
+  // Worst case: high utilization + 3 over-budget categories + a pacing warn +
+  // low safe-to-spend. Budget alerts are capped at 2 so both safety-critical
+  // insights keep a slot in the 4-item list.
+  const status = (category: string, tone: "over" | "warn") => ({
+    category,
+    limit: 100,
+    spent: tone === "over" ? 150 : 80,
+    pct: tone === "over" ? 150 : 80,
+    projected: 160,
+    tone,
+  });
+  const insights = generateInsights({
+    metrics: {
+      totalLiquidity: 5000,
+      spendable: 800,
+      upcomingBillsTotal: 400,
+      buffer: 200,
+      reservedForGoals: 0,
+      safeToSpend: 120, // < 300 → "low-safe" must fire
+      savedThisMonth: 0,
+      periodBudget: 500,
+      billWindowDays: 14,
+    },
+    rescue: {
+      totalDebt: 0,
+      paid: 0,
+      remaining: 0,
+      pct: 0,
+      payoffDate: "",
+      monthsAhead: 0,
+      monthlyPayment: 0,
+      projectedMonths: 0,
+    },
+    utilization: { card: "Visa", pct: 45, balance: 1575, limit: 3500 },
+    spendingTrend: null,
+    budgets: [
+      status("Dining", "over"),
+      status("Groceries", "over"),
+      status("Transport", "over"),
+      status("Fun", "warn"),
+    ],
+  });
+  const ids = insights.map((i) => i.id);
+  assert.equal(insights.length, 4);
+  assert.ok(ids.includes("utilization"));
+  assert.ok(ids.includes("low-safe"));
+  assert.equal(ids.filter((id) => id.startsWith("budget-")).length, 2);
 });
 
 /* --- Plaid → domain mapping (plaid-map.ts) --- */
