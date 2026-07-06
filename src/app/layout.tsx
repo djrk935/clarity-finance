@@ -1,9 +1,10 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { NavBar } from "@/components/dashboard/NavBar";
 import { isAuthed } from "@/lib/auth";
 import { LoginGate } from "@/components/auth/LoginGate";
+import { PwaRegister } from "@/components/pwa/PwaRegister";
 
 const display = Space_Grotesk({
   variable: "--font-display",
@@ -26,6 +27,15 @@ export const metadata: Metadata = {
   title: "Clarity — Financial rescue, in focus",
   description:
     "A calm, honest view of your money and the plan to get back to solid ground.",
+  appleWebApp: {
+    capable: true,
+    title: "Clarity",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0b0d12",
 };
 
 export default async function RootLayout({
@@ -40,6 +50,7 @@ export default async function RootLayout({
       className={`${display.variable} ${sans.variable} ${mono.variable}`}
     >
       <body>
+        <PwaRegister />
         {authed ? (
           <div className="wrap">
             <NavBar />

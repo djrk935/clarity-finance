@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Clarity mark: emerald "C" arc + rising spark on the app's dark ground.
+       Content stays inside the central 80% so the icon survives maskable crops. -->
+  <rect width="512" height="512" rx="96" fill="#0b0d12"/>
+  <circle cx="256" cy="256" r="132" fill="none" stroke="#34d399" stroke-width="44"
+          stroke-linecap="round" stroke-dasharray="622 208" stroke-dashoffset="-104"
+          transform="rotate(45 256 256)"/>
+  <circle cx="352" cy="160" r="34" fill="#34d399"/>
+</svg>
