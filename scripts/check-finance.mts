@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import * as F from "../src/lib/finance.ts";
 import { generateInsights } from "../src/lib/insights.ts";
 import { renderDigest } from "../src/lib/digest.ts";
+import { scrubText, scrubBreadcrumb, scrubEvent } from "../src/lib/monitoring.ts";
 import { toTransaction } from "../src/lib/data/plaid-map.ts";
 import {
   accounts,
@@ -616,6 +617,42 @@ check("insights: budget alerts can't crowd out utilization / low safe-to-spend",
   assert.ok(ids.includes("utilization"));
   assert.ok(ids.includes("low-safe"));
   assert.equal(ids.filter((id) => id.startsWith("budget-")).length, 2);
+});
+
+check("monitoring scrubbers redact amounts and strip cookies/PII", () => {
+  assert.equal(
+    scrubText("paid $1,240.50 then $ -35 of 1240.50 total"),
+    "paid [amount] then [amount] of [amount] total",
+  );
+  assert.equal(scrubText("HTTP 200 after 3 retries"), "HTTP 200 after 3 retries");
+
+  const crumb = scrubBreadcrumb({
+    message: "fetch /api/x?amount=99.95",
+    data: { url: "/pay?total=1,234.56", status_code: 500 },
+  })!;
+  assert.equal(crumb.message, "fetch /api/x?amount=[amount]");
+  assert.equal(crumb.data!.url, "/pay?total=[amount]");
+  assert.equal(crumb.data!.status_code, 500); // useful numbers survive
+
+  const event = scrubEvent({
+    message: "failed to charge $50.00",
+    user: { email: "x@y.com" },
+    request: {
+      url: "/api/pay?amt=12.00",
+      cookies: { clarity_session: "secret" },
+      headers: { authorization: "Bearer t" },
+      data: { card: "4111" },
+    },
+    exception: { values: [{ value: "balance 987.65 mismatch" }] },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
+  assert.equal(event.message, "failed to charge [amount]");
+  assert.equal(event.user, undefined);
+  assert.equal(event.request!.cookies, undefined);
+  assert.equal(event.request!.headers, undefined);
+  assert.equal(event.request!.data, undefined);
+  assert.equal(event.request!.url, "/api/pay?amt=[amount]");
+  assert.equal(event.exception!.values![0].value, "balance [amount] mismatch");
 });
 
 check("transactionsToCsv escapes quotes/commas and defuses formulas", () => {
