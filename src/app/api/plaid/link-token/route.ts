@@ -33,6 +33,9 @@ export async function POST() {
       transactions: { days_requested: 730 },
       country_codes: [CountryCode.Us],
       language: "en",
+      // New items get the webhook receiver at link time (already-linked items
+      // are registered via the Sync button — see the refresh route).
+      webhook: process.env.PLAID_WEBHOOK_URL || undefined,
     });
     return Response.json({ link_token: res.data.link_token });
   } catch (err) {
