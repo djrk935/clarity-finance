@@ -4,8 +4,9 @@
  *  liabilities → debts, recurring → bills). When no bank is linked it returns
  *  empty and the UI shows a Connect prompt — no demo/seed data.
  *
- *  Data is fetched live from Plaid on each request; only the access token is
- *  persisted (see token-store.ts). */
+ *  Balances/liabilities/recurring are fetched live on each request (behind a
+ *  short cache); transactions sync incrementally into Postgres in production
+ *  (see txn-store.ts) so history accumulates for the reports. */
 
 import { assembleDashboard, assembleSnapshot } from "./assemble";
 import {
@@ -39,11 +40,12 @@ async function getRealRaw(now: Date): Promise<RawData> {
   const accounts = await getPlaidAccounts();
   if (accounts.length === 0) return EMPTY;
 
-  const [transactions, debts, plaidBills] = await Promise.all([
+  const [txnResult, debts, plaidBills] = await Promise.all([
     getPlaidTransactions(),
     getPlaidLiabilities(),
     getPlaidRecurring(),
   ]);
+  const { transactions, degraded } = txnResult;
 
   // Prefer Plaid's recurring product when available; otherwise derive recurring
   // bills from the transaction history (that product is a gated add-on).
@@ -57,7 +59,9 @@ async function getRealRaw(now: Date): Promise<RawData> {
     bills,
     cashflow: cashflowFromTransactions(transactions, now),
   };
-  setCachedRaw(token, raw);
+  // Don't pin a degraded (partial fallback) dataset for the full cache TTL —
+  // let the next request retry the store right away.
+  if (!degraded) setCachedRaw(token, raw);
   return raw;
 }
 

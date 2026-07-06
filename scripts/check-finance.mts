@@ -3,6 +3,7 @@
 
 import assert from "node:assert/strict";
 import * as F from "../src/lib/finance.ts";
+import { toTransaction } from "../src/lib/data/plaid-map.ts";
 import {
   accounts,
   debts,
@@ -378,6 +379,66 @@ check("pluralize renders singular and plural units", () => {
   assert.equal(F.pluralize(14, "day"), "14 days");
   assert.equal(F.pluralize(1, "bill"), "1 bill");
   assert.equal(F.pluralize(0, "bill"), "0 bills");
+});
+
+/* --- Plaid → domain mapping (plaid-map.ts) --- */
+
+// Minimal Plaid transaction stub; toTransaction only reads these fields.
+const plaidTxn = (over: Record<string, unknown>) =>
+  ({
+    transaction_id: "abc123",
+    account_id: "acct9",
+    date: "2026-06-01",
+    name: "NETFLIX.COM",
+    merchant_name: "Netflix",
+    amount: 15.99, // Plaid: positive = money out
+    pending: false,
+    personal_finance_category: { primary: "ENTERTAINMENT", detailed: "ENTERTAINMENT_TV" },
+    ...over,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  }) as any;
+
+check("toTransaction flips Plaid's sign and maps core fields", () => {
+  const t = toTransaction(plaidTxn({}));
+  assert.equal(t.id, "plaid_abc123");
+  assert.equal(t.amount, -15.99); // outflow becomes negative
+  assert.equal(t.description, "Netflix");
+  assert.equal(t.accountId, "acct9");
+  assert.equal(t.pending, false);
+  assert.equal(t.transfer, false);
+  assert.equal(t.date, "2026-06-01T00:00:00.000Z"); // date-only → UTC midnight
+});
+
+check("toTransaction maps categories (FOOD_AND_DRINK → Dining, title-cases others)", () => {
+  assert.equal(
+    toTransaction(plaidTxn({ personal_finance_category: { primary: "FOOD_AND_DRINK", detailed: "FOOD_AND_DRINK_RESTAURANT" } })).category,
+    "Dining",
+  );
+  assert.equal(
+    toTransaction(plaidTxn({ personal_finance_category: { primary: "GENERAL_MERCHANDISE", detailed: "GENERAL_MERCHANDISE_OTHER" } })).category,
+    "General Merchandise",
+  );
+  // no PFC → falls back to legacy category, then "Other"
+  assert.equal(toTransaction(plaidTxn({ personal_finance_category: null, category: ["Shops"] })).category, "Shops");
+  assert.equal(toTransaction(plaidTxn({ personal_finance_category: null, category: null })).category, "Other");
+});
+
+check("toTransaction flags only genuinely-internal movements as transfers", () => {
+  const det = (detailed: string, primary = "TRANSFER_OUT") =>
+    toTransaction(plaidTxn({ personal_finance_category: { primary, detailed } })).transfer;
+  assert.equal(det("TRANSFER_OUT_SAVINGS"), true);
+  assert.equal(det("TRANSFER_IN_ACCOUNT_TRANSFER", "TRANSFER_IN"), true);
+  assert.equal(det("LOAN_PAYMENTS_CREDIT_CARD_PAYMENT", "LOAN_PAYMENTS"), true);
+  // real income / real spending stay counted
+  assert.equal(det("TRANSFER_IN_DEPOSIT", "TRANSFER_IN"), false);
+  assert.equal(det("LOAN_PAYMENTS_CAR_PAYMENT", "LOAN_PAYMENTS"), false);
+  assert.equal(det("INCOME_WAGES", "INCOME"), false);
+});
+
+check("toTransaction preserves pending and falls back to name", () => {
+  const t = toTransaction(plaidTxn({ pending: true, merchant_name: null }));
+  assert.equal(t.pending, true);
+  assert.equal(t.description, "NETFLIX.COM");
 });
 
 check("transfers/card payments are excluded from spending & income", () => {

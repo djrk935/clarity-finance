@@ -33,7 +33,10 @@ npm run dev               # http://localhost:3000
 
 With no keys set, the app runs but shows nothing to link yet. Add Plaid keys to
 connect a bank; everything on the dashboard is **real data from your linked
-accounts** (fetched live on each request — there is no demo/seed data).
+accounts** — there is no demo/seed data. Balances are fetched live; in
+production, transactions are persisted in Postgres and synced incrementally, so
+history accumulates beyond Plaid's ~90-day default and the yearly reports stay
+complete.
 
 ## Environment variables
 
@@ -46,7 +49,7 @@ accounts** (fetched live on each request — there is no demo/seed data).
 | `ADVISOR_MODEL`    | Optional model override (default `claude-sonnet-4-6`)            |
 | `APP_PASSWORD`     | Require this password to use the app. Blank = open (local dev).   |
 | `APP_SECRET`       | Long random string used to sign the login cookie.                |
-| `DATABASE_URL`     | `postgres://…` in production (stores the Plaid token). Local: any non-postgres value uses a local file instead. |
+| `DATABASE_URL`     | `postgres://…` in production (stores the Plaid token, synced transactions, and settings). Local: any non-postgres value uses a local file instead. |
 
 ## Scripts
 
@@ -73,9 +76,12 @@ accounts** (fetched live on each request — there is no demo/seed data).
   HMAC of `APP_PASSWORD` keyed by `APP_SECRET`. Enforced only when
   `APP_PASSWORD` is set, so local dev stays open. Pages and every API route are
   guarded, and `lib/rate-limit.ts` locks out an IP after repeated failed logins.
-- **Token persistence.** `lib/token-store.ts` keeps the one Plaid access token
-  in a local file during dev and in Postgres in production (so the link survives
-  on an ephemeral host).
+- **Persistence.** `lib/token-store.ts` keeps the one Plaid access token in a
+  local file during dev and in Postgres in production (so the link survives on
+  an ephemeral host). `lib/data/txn-store.ts` additionally persists
+  transactions in Postgres with a cursor-based incremental sync
+  (added/modified/removed applied atomically), so each request only pulls the
+  delta and history accumulates for the reports.
 - **AI advisor.** `/api/advisor` uses Claude when `ANTHROPIC_API_KEY` is set,
   otherwise a deterministic rule-based brain — both grounded in your snapshot.
 
