@@ -11,6 +11,7 @@
 import { timingSafeEqual } from "crypto";
 import { getSnapshot } from "@/lib/data/store";
 import { loadSettings } from "@/lib/data/settings-store";
+import { listUserIds } from "@/lib/data/user-store";
 import { renderDigest } from "@/lib/digest";
 import { notifyConfigured, sendEmail } from "@/lib/notify";
 
@@ -30,16 +31,32 @@ async function run(request: Request): Promise<Response> {
   if (!authorized(request)) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
-
-  const settings = await loadSettings();
-  if (!settings.alertsEnabled || !settings.alertEmail || !notifyConfigured()) {
+  if (!notifyConfigured()) {
     // 200 so the cron doesn't retry-storm; body says why nothing was sent.
-    return Response.json({ ok: false, reason: "email alerts not enabled" });
+    return Response.json({ ok: false, reason: "email provider not configured" });
   }
 
-  const { subject, text } = renderDigest(await getSnapshot());
-  const sent = await sendEmail(settings.alertEmail, subject, text);
-  return Response.json({ ok: sent });
+  // Walk every user; only opted-in ones (alerts toggle + email) get a digest.
+  // Counts only in the response — never per-user data on this public-ish route.
+  let sent = 0;
+  let skipped = 0;
+  let failed = 0;
+  for (const userId of await listUserIds()) {
+    try {
+      const settings = await loadSettings(userId);
+      if (!settings.alertsEnabled || !settings.alertEmail) {
+        skipped += 1;
+        continue;
+      }
+      const { subject, text } = renderDigest(await getSnapshot(userId));
+      if (await sendEmail(settings.alertEmail, subject, text)) sent += 1;
+      else failed += 1;
+    } catch (err) {
+      failed += 1;
+      console.error("Digest failed for a user:", err);
+    }
+  }
+  return Response.json({ ok: failed === 0, sent, skipped, failed });
 }
 
 // Support both verbs — external cron services commonly only do GET.

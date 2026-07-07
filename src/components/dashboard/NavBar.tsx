@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
 import {
   LayoutDashboard,
+  LogOut,
   Receipt,
   PieChart,
   Wallet,
@@ -24,6 +26,12 @@ const NAV = [
 
 export function NavBar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleSignOut() {
+    await signOut({ redirect: false });
+    router.refresh(); // layout re-renders straight into the AuthGate
+  }
 
   return (
     <header className="nav">
@@ -65,6 +73,15 @@ export function NavBar() {
           <SettingsIcon size={17} aria-hidden />
         </Link>
         <SyncButton />
+        <button
+          type="button"
+          className="iconbtn"
+          onClick={handleSignOut}
+          aria-label="Sign out"
+          title="Sign out"
+        >
+          <LogOut size={17} aria-hidden />
+        </button>
       </div>
     </header>
   );

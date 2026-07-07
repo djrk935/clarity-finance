@@ -2,15 +2,15 @@ import { z } from "zod";
 import { getPlaidClient, readAccessToken, saveAccessToken } from "@/lib/plaid";
 import { clearDataCache } from "@/lib/data/cache";
 import { clearTransactionStore, txnStoreEnabled } from "@/lib/data/txn-store";
-import { requireApiAuth } from "@/lib/auth";
+import { currentUserId, unauthorized } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
 const BodySchema = z.object({ public_token: z.string().min(1) });
 
 export async function POST(request: Request) {
-  const unauth = await requireApiAuth();
-  if (unauth) return unauth;
+  const userId = await currentUserId();
+  if (!userId) return unauthorized();
 
   const client = getPlaidClient();
   if (!client) {
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const previousToken = await readAccessToken();
+    const previousToken = await readAccessToken(userId);
 
     const res = await client.itemPublicTokenExchange({
       public_token: publicToken,
@@ -33,9 +33,9 @@ export async function POST(request: Request) {
     // Wipe stored transactions + sync cursor BEFORE saving the new token —
     // they belong to the previous item and must never mix with the new one.
     // (If the wipe fails we bail with a 500 and the old token stays intact.)
-    if (txnStoreEnabled()) await clearTransactionStore();
-    await saveAccessToken(res.data.access_token, res.data.item_id);
-    clearDataCache();
+    if (txnStoreEnabled()) await clearTransactionStore(userId);
+    await saveAccessToken(userId, res.data.access_token, res.data.item_id);
+    clearDataCache(userId);
 
     // Deactivate the replaced item at Plaid (best-effort, after the new link
     // is safely saved — a failure here must not break the new connection).

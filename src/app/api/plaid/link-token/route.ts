@@ -1,12 +1,12 @@
 import { Products, CountryCode } from "plaid";
 import { getPlaidClient } from "@/lib/plaid";
-import { requireApiAuth } from "@/lib/auth";
+import { currentUserId, unauthorized } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
 export async function POST() {
-  const unauth = await requireApiAuth();
-  if (unauth) return unauth;
+  const userId = await currentUserId();
+  if (!userId) return unauthorized();
 
   const client = getPlaidClient();
   if (!client) {
@@ -24,7 +24,7 @@ export async function POST() {
 
   try {
     const res = await client.linkTokenCreate({
-      user: { client_user_id: "clarity-user" },
+      user: { client_user_id: userId },
       client_name: "Clarity",
       products: [Products.Transactions],
       optional_products: optionalProducts,

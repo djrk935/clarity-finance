@@ -4,13 +4,14 @@ import { creditUtilization, formatCurrency } from "@/lib/finance";
 import { PageHead } from "@/components/dashboard/PageHead";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { ConnectBank } from "@/components/dashboard/ConnectBank";
-import { isAuthed } from "@/lib/auth";
+import { currentUserId } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function AccountsPage() {
-  if (!(await isAuthed())) return null;
-  const d = await getDashboardData();
+  const userId = await currentUserId();
+  if (!userId) return null;
+  const d = await getDashboardData(userId);
   const depository = d.accounts.filter((a) => a.type !== "credit");
   const credit = d.accounts.filter((a) => a.type === "credit");
   const totalDebt = d.rescue.remaining;

@@ -1,10 +1,13 @@
 /** Account data from a linked Plaid item. Returns [] when Plaid isn't
  *  configured or no bank is linked, so callers can merge unconditionally.
  *  Balances/liabilities/recurring are fetched live; transactions sync
- *  incrementally into Postgres when available (see txn-store.ts). */
+ *  incrementally into Postgres when available (see txn-store.ts).
+ *
+ *  Callers resolve the user's access token once (store.ts) and pass it in —
+ *  these functions never guess whose data they're fetching. */
 
 import type { PlaidApi, Transaction as PlaidTxn, AccountBase } from "plaid";
-import { getPlaidClient, readAccessToken } from "../plaid";
+import { getPlaidClient } from "../plaid";
 import { toTransaction, titleCase } from "./plaid-map";
 import {
   txnStoreEnabled,
@@ -51,8 +54,7 @@ function toAccount(a: AccountBase): Account | null {
   return null;
 }
 
-export async function getPlaidAccounts(): Promise<Account[]> {
-  const token = await readAccessToken();
+export async function getPlaidAccounts(token: string | null): Promise<Account[]> {
   const client = getPlaidClient();
   if (!token || !client) return [];
 
@@ -121,8 +123,10 @@ export interface TransactionsResult {
   degraded: boolean;
 }
 
-export async function getPlaidTransactions(): Promise<TransactionsResult> {
-  const token = await readAccessToken();
+export async function getPlaidTransactions(
+  userId: string,
+  token: string | null,
+): Promise<TransactionsResult> {
   const client = getPlaidClient();
   if (!token || !client) return { transactions: [], degraded: false };
 
@@ -141,7 +145,7 @@ export async function getPlaidTransactions(): Promise<TransactionsResult> {
   // atomically, then serve from the store. History accumulates beyond Plaid's
   // ~90-day default, so weekly/monthly/yearly reports stay complete.
   try {
-    const cursor = await readSyncCursor();
+    const cursor = await readSyncCursor(userId);
     // 500 pages × 500 txns is far beyond any personal account — purely a
     // runaway guard. An incomplete walk is never persisted (cursor contract).
     const delta = await syncFromPlaid(client, token, cursor, 500);
@@ -157,6 +161,7 @@ export async function getPlaidTransactions(): Promise<TransactionsResult> {
       for (const t of delta.added) byId.set(t.transaction_id, t);
       for (const t of delta.modified) byId.set(t.transaction_id, t);
       const applied = await applySyncDelta(
+        userId,
         [...byId.values()].map(toTransaction),
         delta.removed,
         delta.cursor,
@@ -172,7 +177,7 @@ export async function getPlaidTransactions(): Promise<TransactionsResult> {
   }
 
   try {
-    return { transactions: await readStoredTransactions(), degraded: false };
+    return { transactions: await readStoredTransactions(userId), degraded: false };
   } catch (err) {
     console.error("Transaction store read failed; falling back to live fetch:", err);
     try {
@@ -187,8 +192,7 @@ export async function getPlaidTransactions(): Promise<TransactionsResult> {
 
 /** Real debts from Plaid Liabilities (credit cards, student loans, mortgages).
  *  Requires the Liabilities product on the linked item. */
-export async function getPlaidLiabilities(): Promise<Debt[]> {
-  const token = await readAccessToken();
+export async function getPlaidLiabilities(token: string | null): Promise<Debt[]> {
   const client = getPlaidClient();
   if (!token || !client) return [];
 
@@ -252,8 +256,7 @@ export async function getPlaidLiabilities(): Promise<Debt[]> {
 }
 
 /** Real recurring bills from Plaid Recurring Transactions (outflow streams). */
-export async function getPlaidRecurring(): Promise<Bill[]> {
-  const token = await readAccessToken();
+export async function getPlaidRecurring(token: string | null): Promise<Bill[]> {
   const client = getPlaidClient();
   if (!token || !client) return [];
 

@@ -11,11 +11,14 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { pool } from "../token-store";
+import { safeIdSegment } from "./id-util";
 import { round2 } from "../finance";
 import type { NetWorthPoint } from "../types";
 
 const isPostgres = (process.env.DATABASE_URL ?? "").startsWith("postgres");
-const HISTORY_FILE = path.join(process.cwd(), ".plaid", "history.json");
+function historyFile(userId: string): string {
+  return path.join(process.cwd(), ".plaid", `history-${safeIdSegment(userId)}.json`);
+}
 /** ~2 years of daily points — plenty for the chart, bounded for memory. */
 const MAX_POINTS = 730;
 
@@ -50,19 +53,20 @@ function normalize(raw: unknown): NetWorthPoint[] {
 
 /* ---------------- local file mode ---------------- */
 
-async function fileRead(): Promise<NetWorthPoint[]> {
+async function fileRead(userId: string): Promise<NetWorthPoint[]> {
   try {
-    return normalize(JSON.parse(await fs.readFile(HISTORY_FILE, "utf8")));
+    return normalize(JSON.parse(await fs.readFile(historyFile(userId), "utf8")));
   } catch {
     return [];
   }
 }
 
-async function fileRecord(p: NetWorthPoint): Promise<void> {
+async function fileRecord(userId: string, p: NetWorthPoint): Promise<void> {
   // normalize dedupes by date with the last entry winning → upsert on the day.
-  const points = normalize([...(await fileRead()), p]);
-  await fs.mkdir(path.dirname(HISTORY_FILE), { recursive: true });
-  await fs.writeFile(HISTORY_FILE, JSON.stringify(points, null, 2));
+  const points = normalize([...(await fileRead(userId)), p]);
+  const file = historyFile(userId);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, JSON.stringify(points, null, 2));
 }
 
 /* ---------------- postgres mode ---------------- */
@@ -71,28 +75,30 @@ async function pgEnsure(): Promise<void> {
   await pool().query(
     `CREATE TABLE IF NOT EXISTS net_worth_snapshot (
        id SERIAL PRIMARY KEY,
-       captured_at DATE NOT NULL UNIQUE,
+       user_id TEXT NOT NULL,
+       captured_at DATE NOT NULL,
        liquidity DOUBLE PRECISION NOT NULL,
        debt DOUBLE PRECISION NOT NULL,
-       net DOUBLE PRECISION NOT NULL
+       net DOUBLE PRECISION NOT NULL,
+       UNIQUE (user_id, captured_at)
      )`,
   );
 }
 
-async function pgRecord(p: NetWorthPoint): Promise<void> {
+async function pgRecord(userId: string, p: NetWorthPoint): Promise<void> {
   await pgEnsure();
   await pool().query(
-    `INSERT INTO net_worth_snapshot (captured_at, liquidity, debt, net)
-     VALUES ($1, $2, $3, $4)
-     ON CONFLICT (captured_at) DO UPDATE SET
+    `INSERT INTO net_worth_snapshot (user_id, captured_at, liquidity, debt, net)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (user_id, captured_at) DO UPDATE SET
        liquidity = EXCLUDED.liquidity,
        debt = EXCLUDED.debt,
        net = EXCLUDED.net`,
-    [p.date, p.liquidity, p.debt, p.net],
+    [safeIdSegment(userId), p.date, p.liquidity, p.debt, p.net],
   );
 }
 
-async function pgRead(limit: number): Promise<NetWorthPoint[]> {
+async function pgRead(userId: string, limit: number): Promise<NetWorthPoint[]> {
   await pgEnsure();
   // to_char keeps the date a plain string — pg would otherwise parse DATE into
   // a local-midnight Date, shifting the day west of UTC.
@@ -104,19 +110,21 @@ async function pgRead(limit: number): Promise<NetWorthPoint[]> {
   }>(
     `SELECT to_char(captured_at, 'YYYY-MM-DD') AS date, liquidity, debt, net
      FROM (
-       SELECT * FROM net_worth_snapshot ORDER BY captured_at DESC LIMIT $1
+       SELECT * FROM net_worth_snapshot WHERE user_id = $1
+       ORDER BY captured_at DESC LIMIT $2
      ) recent
      ORDER BY captured_at ASC`,
-    [limit],
+    [safeIdSegment(userId), limit],
   );
   return normalize(res.rows);
 }
 
 /* ---------------- public API ---------------- */
 
-/** Upsert today's snapshot (one row per UTC day). Callers treat history as
- *  best-effort — catch failures rather than breaking the request. */
+/** Upsert today's snapshot for one user (one row per UTC day). Callers treat
+ *  history as best-effort — catch failures rather than breaking the request. */
 export async function recordNetWorthSnapshot(
+  userId: string,
   s: { liquidity: number; debt: number; net: number },
   now: Date = new Date(),
 ): Promise<void> {
@@ -126,13 +134,16 @@ export async function recordNetWorthSnapshot(
     debt: round2(s.debt),
     net: round2(s.net),
   };
-  if (isPostgres) await pgRecord(point);
-  else await fileRecord(point);
+  if (isPostgres) await pgRecord(userId, point);
+  else await fileRecord(userId, point);
 }
 
-/** Snapshot series, oldest → newest (the most recent `limit` days). */
+/** One user's snapshot series, oldest → newest (the most recent `limit` days). */
 export async function readNetWorthHistory(
+  userId: string,
   limit = MAX_POINTS,
 ): Promise<NetWorthPoint[]> {
-  return isPostgres ? pgRead(limit) : (await fileRead()).slice(-limit);
+  return isPostgres
+    ? pgRead(userId, limit)
+    : (await fileRead(userId)).slice(-limit);
 }

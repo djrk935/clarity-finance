@@ -3,13 +3,14 @@ import { getSnapshot } from "@/lib/data/store";
 import { formatCurrency, pluralize } from "@/lib/finance";
 import { PageHead } from "@/components/dashboard/PageHead";
 import { AdvisorChat } from "@/components/dashboard/AdvisorChat";
-import { isAuthed } from "@/lib/auth";
+import { currentUserId } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdvisorPage() {
-  if (!(await isAuthed())) return null;
-  const s = await getSnapshot();
+  const userId = await currentUserId();
+  if (!userId) return null;
+  const s = await getSnapshot(userId);
   const live = Boolean(process.env.ANTHROPIC_API_KEY);
 
   return (

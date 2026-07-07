@@ -2,13 +2,14 @@ import { getDashboardData } from "@/lib/data/store";
 import { PageHead } from "@/components/dashboard/PageHead";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { ActivityView } from "@/components/dashboard/ActivityView";
-import { isAuthed } from "@/lib/auth";
+import { currentUserId } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function ActivityPage() {
-  if (!(await isAuthed())) return null;
-  const d = await getDashboardData();
+  const userId = await currentUserId();
+  if (!userId) return null;
+  const d = await getDashboardData(userId);
 
   return (
     <>

@@ -1,12 +1,13 @@
-/** The data store — REAL DATA ONLY.
+/** The data store — REAL DATA ONLY, per user.
  *
- *  Everything comes from the linked bank via Plaid (accounts, transactions,
- *  liabilities → debts, recurring → bills). When no bank is linked it returns
- *  empty and the UI shows a Connect prompt — no demo/seed data.
+ *  Everything comes from the signed-in user's linked bank via Plaid (accounts,
+ *  transactions, liabilities → debts, recurring → bills). When no bank is
+ *  linked it returns empty and the UI shows a Connect prompt — no demo/seed
+ *  data.
  *
  *  Balances/liabilities/recurring are fetched live on each request (behind a
- *  short cache); transactions sync incrementally into Postgres in production
- *  (see txn-store.ts) so history accumulates for the reports. */
+ *  short per-user cache); transactions sync incrementally into Postgres in
+ *  production (see txn-store.ts) so history accumulates for the reports. */
 
 import { assembleDashboard, assembleSnapshot } from "./assemble";
 import {
@@ -31,21 +32,21 @@ const EMPTY: RawData = {
   cashflow: [],
 };
 
-async function getRealRaw(now: Date): Promise<RawData> {
-  const token = await readAccessToken();
+async function getRealRaw(userId: string, now: Date): Promise<RawData> {
+  const token = await readAccessToken(userId);
   if (!token) return EMPTY; // nothing linked yet
 
   // Reuse the recent pull so tab switches don't re-hit Plaid every time.
-  const hit = getCachedRaw(token);
+  const hit = getCachedRaw(userId, token);
   if (hit) return hit;
 
-  const accounts = await getPlaidAccounts();
+  const accounts = await getPlaidAccounts(token);
   if (accounts.length === 0) return EMPTY;
 
   const [txnResult, debts, plaidBills] = await Promise.all([
-    getPlaidTransactions(),
-    getPlaidLiabilities(),
-    getPlaidRecurring(),
+    getPlaidTransactions(userId, token),
+    getPlaidLiabilities(token),
+    getPlaidRecurring(token),
   ]);
   const { transactions, degraded } = txnResult;
 
@@ -64,18 +65,23 @@ async function getRealRaw(now: Date): Promise<RawData> {
   // Don't pin a degraded (partial fallback) dataset for the full cache TTL —
   // let the next request retry the store right away.
   if (!degraded) {
-    setCachedRaw(token, raw);
+    setCachedRaw(userId, token, raw);
     // Record today's net-worth point (one per UTC day) now that a full sync
     // completed. History is best-effort: never let it break the request.
     try {
-      await recordNetWorthSnapshot(netWorth(accounts, debts), now);
+      await recordNetWorthSnapshot(userId, netWorth(accounts, debts), now);
     } catch (err) {
       console.error("Net-worth snapshot failed:", err);
     }
     // Post-sync spending alerts (opt-in, de-duped) — same best-effort rule.
     try {
-      const settings = await loadSettings();
-      await runSpendingAlerts(assembleDashboard(raw, settings, now), settings, now);
+      const settings = await loadSettings(userId);
+      await runSpendingAlerts(
+        userId,
+        assembleDashboard(raw, settings, now),
+        settings,
+        now,
+      );
     } catch (err) {
       console.error("Spending alerts failed:", err);
     }
@@ -84,15 +90,23 @@ async function getRealRaw(now: Date): Promise<RawData> {
 }
 
 export async function getDashboardData(
+  userId: string,
   now: Date = new Date(),
 ): Promise<DashboardData> {
-  const [raw, settings] = await Promise.all([getRealRaw(now), loadSettings()]);
+  const [raw, settings] = await Promise.all([
+    getRealRaw(userId, now),
+    loadSettings(userId),
+  ]);
   return assembleDashboard(raw, settings, now);
 }
 
 export async function getSnapshot(
+  userId: string,
   now: Date = new Date(),
 ): Promise<FinancialSnapshot> {
-  const [raw, settings] = await Promise.all([getRealRaw(now), loadSettings()]);
+  const [raw, settings] = await Promise.all([
+    getRealRaw(userId, now),
+    loadSettings(userId),
+  ]);
   return assembleSnapshot(raw, settings, now);
 }

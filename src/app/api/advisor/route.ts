@@ -3,7 +3,7 @@ import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import { getSnapshot } from "@/lib/data/store";
 import { buildSystemPrompt, ruleBasedReply } from "@/lib/advisor";
-import { requireApiAuth } from "@/lib/auth";
+import { currentUserId, unauthorized } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -27,8 +27,8 @@ function textResponse(text: string): Response {
 }
 
 export async function POST(request: Request) {
-  const unauth = await requireApiAuth();
-  if (unauth) return unauth;
+  const userId = await currentUserId();
+  if (!userId) return unauthorized();
 
   let messages: { role: "user" | "assistant"; content: string }[];
   try {
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
 
   // Snapshot keeps every answer grounded in the user's real numbers.
-  const snapshot = await getSnapshot();
+  const snapshot = await getSnapshot(userId);
 
   // No key configured → always-on, deterministic rule-based advisor.
   if (!process.env.ANTHROPIC_API_KEY) {

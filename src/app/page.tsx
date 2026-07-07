@@ -1,6 +1,6 @@
 import { getDashboardData } from "@/lib/data/store";
 import { formatCurrency, pluralize } from "@/lib/finance";
-import { isAuthed } from "@/lib/auth";
+import { currentUserId } from "@/lib/auth";
 import { KpiHero } from "@/components/dashboard/KpiHero";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { CashflowChart } from "@/components/dashboard/CashflowChart";
@@ -14,8 +14,9 @@ import { AdvisorChat } from "@/components/dashboard/AdvisorChat";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  if (!(await isAuthed())) return null;
-  const d = await getDashboardData();
+  const userId = await currentUserId();
+  if (!userId) return null;
+  const d = await getDashboardData(userId);
   const accountCount = d.accounts.filter((a) => a.type !== "credit").length;
 
   return (

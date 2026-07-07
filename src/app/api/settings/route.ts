@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { loadSettings, saveSettings } from "@/lib/data/settings-store";
-import { requireApiAuth } from "@/lib/auth";
+import { currentUserId, unauthorized } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,14 +24,14 @@ const BodySchema = z.object({
 });
 
 export async function GET() {
-  const unauth = await requireApiAuth();
-  if (unauth) return unauth;
-  return Response.json(await loadSettings());
+  const userId = await currentUserId();
+  if (!userId) return unauthorized();
+  return Response.json(await loadSettings(userId));
 }
 
 export async function POST(request: Request) {
-  const unauth = await requireApiAuth();
-  if (unauth) return unauth;
+  const userId = await currentUserId();
+  if (!userId) return unauthorized();
 
   let patch;
   try {
@@ -40,6 +40,6 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid settings" }, { status: 400 });
   }
 
-  const settings = await saveSettings(patch);
+  const settings = await saveSettings(userId, patch);
   return Response.json({ ok: true, settings });
 }

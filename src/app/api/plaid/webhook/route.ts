@@ -17,6 +17,7 @@ import {
 } from "crypto";
 import { after } from "next/server";
 import { getPlaidClient } from "@/lib/plaid";
+import { findUserByItemId } from "@/lib/token-store";
 import { clearDataCache } from "@/lib/data/cache";
 import { getPlaidTransactions } from "@/lib/data/plaid-source";
 
@@ -130,6 +131,14 @@ export async function POST(request: Request) {
 
   const type = typeof body.webhook_type === "string" ? body.webhook_type : "";
   const code = typeof body.webhook_code === "string" ? body.webhook_code : "";
+  const itemId = typeof body.item_id === "string" ? body.item_id : "";
+
+  // Route the event to its tenant. An item we don't know (already
+  // disconnected, or someone else's) is acknowledged and ignored.
+  const owner = itemId ? await findUserByItemId(itemId) : null;
+  if (!owner) {
+    return Response.json({ ok: true });
+  }
 
   if (type === "TRANSACTIONS" && code === "SYNC_UPDATES_AVAILABLE") {
     // Respond 200 immediately; the sync runs after the response is sent.
@@ -137,8 +146,8 @@ export async function POST(request: Request) {
     // pages use (cursor CAS makes a race with a page-load sync harmless).
     after(async () => {
       try {
-        await getPlaidTransactions();
-        clearDataCache();
+        await getPlaidTransactions(owner.userId, owner.accessToken);
+        clearDataCache(owner.userId);
       } catch (err) {
         console.error("Webhook-triggered sync failed:", err);
       }
@@ -146,7 +155,7 @@ export async function POST(request: Request) {
   } else if (type === "LIABILITIES" || (type === "ITEM" && code === "DEFAULT_UPDATE")) {
     // Balances/liabilities are fetched live per request — dropping the raw
     // cache is all it takes for the next render to be fresh.
-    after(() => clearDataCache());
+    after(() => clearDataCache(owner.userId));
   } else {
     // Known-but-unhandled codes (ITEM errors, historical-update, etc.) are
     // acknowledged so Plaid doesn't retry; log the code only, never the body.

@@ -54,6 +54,7 @@ export async function sendEmail(
  *  De-dupe keys are only persisted after the provider accepts the send, so a
  *  failed send simply retries on a later sync. */
 export async function runSpendingAlerts(
+  userId: string,
   data: DashboardData,
   settings: Settings,
   now: Date = new Date(),
@@ -67,7 +68,7 @@ export async function runSpendingAlerts(
     safeToSpend: data.metrics.safeToSpend,
     safeToSpendBelow: settings.alertSafeToSpendBelow,
     month: now.toISOString().slice(0, 7), // UTC, same calendar as the numbers
-    alreadySent: await readSentAlertKeys(),
+    alreadySent: await readSentAlertKeys(userId),
   });
   if (alerts.length === 0) return;
 
@@ -81,6 +82,7 @@ export async function runSpendingAlerts(
 
   if (await sendEmail(settings.alertEmail, subject, text)) {
     await markAlertsSent(
+      userId,
       alerts.map((a) => a.key),
       now,
     );

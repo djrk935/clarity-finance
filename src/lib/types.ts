@@ -55,7 +55,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  userName: "Dayan",
+  userName: "there", // greeting fallback ("Hi there") until the user sets one
   buffer: 0,
   savingsGoal: 0,
   extraDebtPayment: 0,

@@ -1,15 +1,15 @@
 import { getPlaidClient, plaidConfigured, readAccessToken } from "@/lib/plaid";
-import { requireApiAuth } from "@/lib/auth";
+import { currentUserId, unauthorized } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const unauth = await requireApiAuth();
-  if (unauth) return unauth;
+  const userId = await currentUserId();
+  if (!userId) return unauthorized();
 
   const configured = plaidConfigured();
-  const accessToken = configured ? await readAccessToken() : null;
+  const accessToken = configured ? await readAccessToken(userId) : null;
 
   if (!configured || !accessToken) {
     return Response.json({ configured, connected: false, accounts: [] });

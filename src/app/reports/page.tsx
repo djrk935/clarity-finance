@@ -4,7 +4,7 @@ import { readNetWorthHistory } from "@/lib/data/history-store";
 import { summarizePeriod, monthlyTrend } from "@/lib/finance";
 import { PageHead } from "@/components/dashboard/PageHead";
 import { ReportsView } from "@/components/dashboard/ReportsView";
-import { isAuthed } from "@/lib/auth";
+import { currentUserId } from "@/lib/auth";
 import type { PeriodKey, PeriodSummary } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -12,10 +12,11 @@ export const dynamic = "force-dynamic";
 const PERIOD_KEYS: PeriodKey[] = ["week", "month", "last-month", "year"];
 
 export default async function ReportsPage() {
-  if (!(await isAuthed())) return null;
-  const d = await getDashboardData();
+  const userId = await currentUserId();
+  if (!userId) return null;
+  const d = await getDashboardData(userId);
   // History is best-effort decoration — a store hiccup must not 500 the page.
-  const netWorthHistory = await readNetWorthHistory().catch(() => []);
+  const netWorthHistory = await readNetWorthHistory(userId).catch(() => []);
   const now = new Date();
 
   // Compute every period server-side so the toggle is instant and there's no

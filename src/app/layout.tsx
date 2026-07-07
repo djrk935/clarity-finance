@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { NavBar } from "@/components/dashboard/NavBar";
-import { isAuthed } from "@/lib/auth";
-import { LoginGate } from "@/components/auth/LoginGate";
+import { currentUserId } from "@/lib/auth";
+import { AuthGate } from "@/components/auth/AuthGate";
 import { PwaRegister } from "@/components/pwa/PwaRegister";
 
 const display = Space_Grotesk({
@@ -43,7 +43,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const authed = await isAuthed();
+  const authed = Boolean(await currentUserId());
   return (
     <html
       lang="en"
@@ -57,7 +57,7 @@ export default async function RootLayout({
             <main>{children}</main>
           </div>
         ) : (
-          <LoginGate />
+          <AuthGate />
         )}
       </body>
     </html>

@@ -1,27 +1,48 @@
-/** Persists the single user's settings (buffer, savings goal, extra debt
- *  payment, etc.). Dual-mode like the token store:
- *   - DATABASE_URL starts with "postgres" → a Postgres table (survives restarts
- *     on ephemeral hosts).
- *   - otherwise → a local .plaid/settings.json file (dev).
+/** Per-user settings persistence. Dual-mode like token-store:
+ *   - Postgres: `user_settings` table keyed by user_id (JSONB payload)
+ *   - local dev: .plaid/settings-<userId>.json
  *
- *  Cached in memory (busted on save) so reading settings on every page render
- *  doesn't add a round-trip. */
+ *  normalize() is the single validation choke point — applied on every read
+ *  AND write, so out-of-range / string / older-shape stored data can't slip
+ *  past regardless of where it came from. */
 
 import { promises as fs } from "fs";
 import path from "path";
 import { pool } from "../token-store";
+import { safeIdSegment } from "./id-util";
 import { round2, sanitizeBudgets } from "../finance";
 import { DEFAULT_SETTINGS, type Settings } from "../types";
 
 const isPostgres = (process.env.DATABASE_URL ?? "").startsWith("postgres");
-const SETTINGS_FILE = path.join(process.cwd(), ".plaid", "settings.json");
 const CACHE_TTL_MS = 30_000;
+/** Cap on per-user cache entries; beyond it the stalest entry is evicted. */
+const MAX_CACHE = 500;
 
 // On globalThis so the cache is shared across Next's separate route/page
 // bundles — a save through the API must be visible to page renders at once.
 const g = globalThis as unknown as {
-  claritySettingsCache?: { value: Settings; at: number } | null;
+  claritySettingsCache?: Map<string, { value: Settings; at: number }>;
 };
+
+function cache(): Map<string, { value: Settings; at: number }> {
+  return (g.claritySettingsCache ??= new Map());
+}
+
+function cachePut(userId: string, value: Settings): void {
+  const c = cache();
+  if (c.size >= MAX_CACHE && !c.has(userId)) {
+    let oldest: string | null = null;
+    let oldestAt = Infinity;
+    for (const [k, v] of c) {
+      if (v.at < oldestAt) {
+        oldestAt = v.at;
+        oldest = k;
+      }
+    }
+    if (oldest) c.delete(oldest);
+  }
+  c.set(userId, { value, at: Date.now() });
+}
 
 /** Coerce + clamp one numeric field (strings, out-of-range, NaN all handled). */
 function clampNum(v: unknown, def: number, min: number, max: number): number {
@@ -71,64 +92,73 @@ function sanitizeEmail(v: unknown): string {
 
 /* ---------------- file mode ---------------- */
 
-async function fileRead(): Promise<Settings> {
+function settingsFile(userId: string): string {
+  return path.join(process.cwd(), ".plaid", `settings-${safeIdSegment(userId)}.json`);
+}
+
+async function fileRead(userId: string): Promise<Settings> {
   try {
-    const raw = await fs.readFile(SETTINGS_FILE, "utf8");
+    const raw = await fs.readFile(settingsFile(userId), "utf8");
     return normalize(JSON.parse(raw));
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
 }
-async function fileWrite(s: Settings): Promise<void> {
-  await fs.mkdir(path.dirname(SETTINGS_FILE), { recursive: true });
-  await fs.writeFile(SETTINGS_FILE, JSON.stringify(s, null, 2));
+async function fileWrite(userId: string, s: Settings): Promise<void> {
+  const file = settingsFile(userId);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, JSON.stringify(s, null, 2));
 }
 
 /* ---------------- postgres mode ---------------- */
 
 async function pgEnsure(): Promise<void> {
   await pool().query(
-    `CREATE TABLE IF NOT EXISTS app_settings (
-       id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    `CREATE TABLE IF NOT EXISTS user_settings (
+       user_id TEXT PRIMARY KEY,
        data JSONB NOT NULL,
        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
      )`,
   );
 }
-async function pgRead(): Promise<Settings> {
+async function pgRead(userId: string): Promise<Settings> {
   await pgEnsure();
   const res = await pool().query<{ data: unknown }>(
-    "SELECT data FROM app_settings WHERE id = 1",
+    "SELECT data FROM user_settings WHERE user_id = $1",
+    [safeIdSegment(userId)],
   );
   return normalize(res.rows[0]?.data);
 }
-async function pgWrite(s: Settings): Promise<void> {
+async function pgWrite(userId: string, s: Settings): Promise<void> {
   await pgEnsure();
   await pool().query(
-    `INSERT INTO app_settings (id, data, updated_at) VALUES (1, $1, now())
-     ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`,
-    [JSON.stringify(s)],
+    `INSERT INTO user_settings (user_id, data, updated_at) VALUES ($1, $2, now())
+     ON CONFLICT (user_id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`,
+    [safeIdSegment(userId), JSON.stringify(s)],
   );
 }
 
 /* ---------------- public API ---------------- */
 
-export async function loadSettings(): Promise<Settings> {
+export async function loadSettings(userId: string): Promise<Settings> {
   // Short TTL so a change made on another instance (Postgres mode) self-heals,
   // while still sparing a DB round-trip on rapid navigation.
-  const cache = g.claritySettingsCache;
-  if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.value;
-  const value = isPostgres ? await pgRead() : await fileRead();
-  g.claritySettingsCache = { value, at: Date.now() };
+  const hit = cache().get(userId);
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value;
+  const value = isPostgres ? await pgRead(userId) : await fileRead(userId);
+  cachePut(userId, value);
   return value;
 }
 
 /** Merge a partial update over current settings, persist, and refresh cache. */
-export async function saveSettings(patch: Partial<Settings>): Promise<Settings> {
-  const current = await loadSettings();
+export async function saveSettings(
+  userId: string,
+  patch: Partial<Settings>,
+): Promise<Settings> {
+  const current = await loadSettings(userId);
   const next = normalize({ ...current, ...patch });
-  if (isPostgres) await pgWrite(next);
-  else await fileWrite(next);
-  g.claritySettingsCache = { value: next, at: Date.now() };
+  if (isPostgres) await pgWrite(userId, next);
+  else await fileWrite(userId, next);
+  cachePut(userId, next);
   return next;
 }
