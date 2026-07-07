@@ -146,7 +146,10 @@ export async function POST(request: Request) {
     // pages use (cursor CAS makes a race with a page-load sync harmless).
     after(async () => {
       try {
-        await getPlaidTransactions(owner.userId, owner.accessToken);
+        // Sync just the bank the webhook is about.
+        await getPlaidTransactions(owner.userId, [
+          { itemId, accessToken: owner.accessToken },
+        ]);
         clearDataCache(owner.userId);
       } catch (err) {
         console.error("Webhook-triggered sync failed:", err);

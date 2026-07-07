@@ -4,11 +4,13 @@
 
 import { Configuration, PlaidApi, PlaidEnvironments } from "plaid";
 
-// Re-export token persistence under the names the routes/sources already use.
+// Re-export item persistence (one row per linked bank) for routes/sources.
 export {
-  savePlaidToken as saveAccessToken,
-  readPlaidToken as readAccessToken,
-  clearPlaidToken as clearAccessToken,
+  savePlaidItem,
+  listPlaidItems,
+  removePlaidItem,
+  findUserByItemId,
+  type PlaidItem,
 } from "./token-store";
 
 export function plaidConfigured(): boolean {

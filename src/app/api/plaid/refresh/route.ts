@@ -1,5 +1,5 @@
 import { clearDataCache } from "@/lib/data/cache";
-import { getPlaidClient, readAccessToken } from "@/lib/plaid";
+import { getPlaidClient, listPlaidItems } from "@/lib/plaid";
 import { currentUserId, unauthorized } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 /** Drop the user's cached Plaid pull so the next render fetches fresh data.
  *  The Sync button calls this, then refreshes the route.
  *
- *  Also (re)registers the webhook receiver on the user's linked item when
+ *  Also (re)registers the webhook receiver on every linked item when
  *  PLAID_WEBHOOK_URL is set: new items get it at link time, but items linked
  *  before webhooks existed need /item/webhook/update once — one tap of Sync
  *  after deploying with the env var covers it. Idempotent and best-effort:
@@ -18,12 +18,17 @@ export async function POST() {
 
   const webhookUrl = process.env.PLAID_WEBHOOK_URL;
   if (webhookUrl) {
-    const [client, token] = [getPlaidClient(), await readAccessToken(userId)];
-    if (client && token) {
-      try {
-        await client.itemWebhookUpdate({ access_token: token, webhook: webhookUrl });
-      } catch (err) {
-        console.error("Plaid webhook registration failed (sync unaffected):", err);
+    const client = getPlaidClient();
+    if (client) {
+      for (const item of await listPlaidItems(userId)) {
+        try {
+          await client.itemWebhookUpdate({
+            access_token: item.accessToken,
+            webhook: webhookUrl,
+          });
+        } catch (err) {
+          console.error("Plaid webhook registration failed (sync unaffected):", err);
+        }
       }
     }
   }

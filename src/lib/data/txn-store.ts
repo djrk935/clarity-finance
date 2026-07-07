@@ -25,6 +25,7 @@ async function ensureTables(): Promise<void> {
     `CREATE TABLE IF NOT EXISTS plaid_transactions (
        id TEXT PRIMARY KEY,
        user_id TEXT NOT NULL,
+       item_id TEXT NOT NULL DEFAULT '',
        date TIMESTAMPTZ NOT NULL,
        description TEXT NOT NULL,
        amount DOUBLE PRECISION NOT NULL,
@@ -34,24 +35,34 @@ async function ensureTables(): Promise<void> {
        transfer BOOLEAN NOT NULL DEFAULT FALSE
      )`,
   );
+  // Older beta tables predate multi-bank — add the column in place.
+  await pool().query(
+    `ALTER TABLE plaid_transactions ADD COLUMN IF NOT EXISTS item_id TEXT NOT NULL DEFAULT ''`,
+  );
   await pool().query(
     `CREATE INDEX IF NOT EXISTS idx_plaid_txn_user_date
        ON plaid_transactions (user_id, date DESC)`,
   );
+  // One sync cursor per linked bank (item), not per user.
   await pool().query(
-    `CREATE TABLE IF NOT EXISTS plaid_sync (
-       user_id TEXT PRIMARY KEY,
+    `CREATE TABLE IF NOT EXISTS plaid_item_sync (
+       user_id TEXT NOT NULL,
+       item_id TEXT NOT NULL,
        cursor TEXT NOT NULL,
-       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+       PRIMARY KEY (user_id, item_id)
      )`,
   );
 }
 
-export async function readSyncCursor(userId: string): Promise<string | null> {
+export async function readSyncCursor(
+  userId: string,
+  itemId: string,
+): Promise<string | null> {
   await ensureTables();
   const res = await pool().query<{ cursor: string }>(
-    "SELECT cursor FROM plaid_sync WHERE user_id = $1",
-    [safeIdSegment(userId)],
+    "SELECT cursor FROM plaid_item_sync WHERE user_id = $1 AND item_id = $2",
+    [safeIdSegment(userId), itemId],
   );
   return res.rows[0]?.cursor ?? null;
 }
@@ -69,6 +80,7 @@ const UPSERT_CHUNK = 500;
  *  the old item's transactions under a new item. Returns whether it applied. */
 export async function applySyncDelta(
   userId: string,
+  itemId: string,
   upserts: Transaction[],
   removedIds: string[],
   cursor: string,
@@ -81,8 +93,8 @@ export async function applySyncDelta(
     await client.query("BEGIN");
 
     const cur = await client.query<{ cursor: string }>(
-      "SELECT cursor FROM plaid_sync WHERE user_id = $1",
-      [uid],
+      "SELECT cursor FROM plaid_item_sync WHERE user_id = $1 AND item_id = $2",
+      [uid, itemId],
     );
     const stored = cur.rows[0]?.cursor ?? null;
     if (stored !== expectedPriorCursor) {
@@ -95,10 +107,11 @@ export async function applySyncDelta(
       const values: unknown[] = [];
       const rows = chunk
         .map((t, j) => {
-          const o = j * 9;
+          const o = j * 10;
           values.push(
             t.id,
             uid,
+            itemId,
             t.date,
             t.description,
             t.amount,
@@ -107,15 +120,16 @@ export async function applySyncDelta(
             t.pending ?? false,
             t.transfer ?? false,
           );
-          return `($${o + 1}, $${o + 2}, $${o + 3}, $${o + 4}, $${o + 5}, $${o + 6}, $${o + 7}, $${o + 8}, $${o + 9})`;
+          return `($${o + 1}, $${o + 2}, $${o + 3}, $${o + 4}, $${o + 5}, $${o + 6}, $${o + 7}, $${o + 8}, $${o + 9}, $${o + 10})`;
         })
         .join(", ");
       await client.query(
         `INSERT INTO plaid_transactions
-           (id, user_id, date, description, amount, category, account_id, pending, transfer)
+           (id, user_id, item_id, date, description, amount, category, account_id, pending, transfer)
          VALUES ${rows}
          ON CONFLICT (id) DO UPDATE SET
            user_id = EXCLUDED.user_id,
+           item_id = EXCLUDED.item_id,
            date = EXCLUDED.date,
            description = EXCLUDED.description,
            amount = EXCLUDED.amount,
@@ -140,9 +154,10 @@ export async function applySyncDelta(
     }
 
     await client.query(
-      `INSERT INTO plaid_sync (user_id, cursor, updated_at) VALUES ($1, $2, now())
-       ON CONFLICT (user_id) DO UPDATE SET cursor = EXCLUDED.cursor, updated_at = now()`,
-      [uid, cursor],
+      `INSERT INTO plaid_item_sync (user_id, item_id, cursor, updated_at)
+       VALUES ($1, $2, $3, now())
+       ON CONFLICT (user_id, item_id) DO UPDATE SET cursor = EXCLUDED.cursor, updated_at = now()`,
+      [uid, itemId, cursor],
     );
 
     await client.query("COMMIT");
@@ -187,9 +202,35 @@ export async function readStoredTransactions(
   }));
 }
 
-/** Wipe one user's stored transactions + cursor (bank disconnected or
- *  re-linked — the cursor and rows belong to the old item and must not mix
- *  with the new one). */
+/** Wipe ONE bank's stored transactions + cursor (that item was disconnected —
+ *  its rows must not linger, and the other banks' rows must not be touched). */
+export async function clearItemTransactions(
+  userId: string,
+  itemId: string,
+): Promise<void> {
+  await ensureTables();
+  const uid = safeIdSegment(userId);
+  const client = await pool().connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      "DELETE FROM plaid_transactions WHERE user_id = $1 AND item_id = $2",
+      [uid, itemId],
+    );
+    await client.query(
+      "DELETE FROM plaid_item_sync WHERE user_id = $1 AND item_id = $2",
+      [uid, itemId],
+    );
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/** Wipe ALL of one user's stored transactions + cursors (full disconnect). */
 export async function clearTransactionStore(userId: string): Promise<void> {
   await ensureTables();
   const uid = safeIdSegment(userId);
@@ -197,7 +238,7 @@ export async function clearTransactionStore(userId: string): Promise<void> {
   try {
     await client.query("BEGIN");
     await client.query("DELETE FROM plaid_transactions WHERE user_id = $1", [uid]);
-    await client.query("DELETE FROM plaid_sync WHERE user_id = $1", [uid]);
+    await client.query("DELETE FROM plaid_item_sync WHERE user_id = $1", [uid]);
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});

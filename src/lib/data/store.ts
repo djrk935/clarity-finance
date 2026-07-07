@@ -20,7 +20,7 @@ import { getCachedRaw, setCachedRaw } from "./cache";
 import { loadSettings } from "./settings-store";
 import { recordNetWorthSnapshot } from "./history-store";
 import { runSpendingAlerts } from "../notify";
-import { readAccessToken } from "../plaid";
+import { listPlaidItems } from "../plaid";
 import { cashflowFromTransactions, detectRecurringBills, netWorth } from "../finance";
 import type { DashboardData, FinancialSnapshot, RawData } from "../types";
 
@@ -33,22 +33,35 @@ const EMPTY: RawData = {
 };
 
 async function getRealRaw(userId: string, now: Date): Promise<RawData> {
-  const token = await readAccessToken(userId);
-  if (!token) return EMPTY; // nothing linked yet
+  const items = await listPlaidItems(userId);
+  if (items.length === 0) return EMPTY; // nothing linked yet
+
+  // Cache key covers the SET of linked banks, so adding/removing one busts it.
+  const cacheKey = items
+    .map((i) => i.itemId)
+    .sort()
+    .join("|");
 
   // Reuse the recent pull so tab switches don't re-hit Plaid every time.
-  const hit = getCachedRaw(userId, token);
+  const hit = getCachedRaw(userId, cacheKey);
   if (hit) return hit;
 
-  const accounts = await getPlaidAccounts(token);
+  // Accounts from every linked bank, labeled with their institution.
+  const accounts = (
+    await Promise.all(
+      items.map((i) => getPlaidAccounts(i.accessToken, i.institution)),
+    )
+  ).flat();
   if (accounts.length === 0) return EMPTY;
 
-  const [txnResult, debts, plaidBills] = await Promise.all([
-    getPlaidTransactions(userId, token),
-    getPlaidLiabilities(token),
-    getPlaidRecurring(token),
+  const [txnResult, debtsNested, billsNested] = await Promise.all([
+    getPlaidTransactions(userId, items),
+    Promise.all(items.map((i) => getPlaidLiabilities(i.accessToken))),
+    Promise.all(items.map((i) => getPlaidRecurring(i.accessToken))),
   ]);
   const { transactions, degraded } = txnResult;
+  const debts = debtsNested.flat();
+  const plaidBills = billsNested.flat();
 
   // Prefer Plaid's recurring product when available; otherwise derive recurring
   // bills from the transaction history (that product is a gated add-on).
@@ -65,7 +78,7 @@ async function getRealRaw(userId: string, now: Date): Promise<RawData> {
   // Don't pin a degraded (partial fallback) dataset for the full cache TTL —
   // let the next request retry the store right away.
   if (!degraded) {
-    setCachedRaw(userId, token, raw);
+    setCachedRaw(userId, cacheKey, raw);
     // Record today's net-worth point (one per UTC day) now that a full sync
     // completed. History is best-effort: never let it break the request.
     try {

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import { isAdmin } from "@/lib/auth";
 import { listUsers } from "@/lib/data/user-store";
-import { readPlaidToken } from "@/lib/token-store";
+import { listPlaidItems } from "@/lib/token-store";
 import { PageHead } from "@/components/dashboard/PageHead";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +21,7 @@ export default async function AdminPage() {
 
   const users = await listUsers();
   const linked = await Promise.all(
-    users.map(async (u) => (await readPlaidToken(u.id)) !== null),
+    users.map(async (u) => (await listPlaidItems(u.id)).length),
   );
 
   return (
@@ -47,8 +47,10 @@ export default async function AdminPage() {
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span className={linked[i] ? "chip good" : "chip"}>
-                  {linked[i] ? "BANK LINKED" : "NO BANK"}
+                <span className={linked[i] > 0 ? "chip good" : "chip"}>
+                  {linked[i] > 0
+                    ? `${linked[i]} BANK${linked[i] === 1 ? "" : "S"}`
+                    : "NO BANK"}
                 </span>
                 <Link href={`/admin/${u.id}`} className="nchip">
                   View

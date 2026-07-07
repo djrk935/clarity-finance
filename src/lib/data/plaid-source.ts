@@ -21,10 +21,9 @@ function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-function toAccount(a: AccountBase): Account | null {
+function toAccount(a: AccountBase, institution: string): Account | null {
   const id = `plaid_${a.account_id}`;
   const name = a.name ?? a.official_name ?? "Linked account";
-  const institution = "Plaid (linked)";
   const type = String(a.type);
   const subtype = String(a.subtype ?? "");
 
@@ -54,14 +53,17 @@ function toAccount(a: AccountBase): Account | null {
   return null;
 }
 
-export async function getPlaidAccounts(token: string | null): Promise<Account[]> {
+export async function getPlaidAccounts(
+  token: string | null,
+  institution = "Linked bank",
+): Promise<Account[]> {
   const client = getPlaidClient();
   if (!token || !client) return [];
 
   try {
     const res = await client.accountsBalanceGet({ access_token: token });
     return res.data.accounts
-      .map(toAccount)
+      .map((a) => toAccount(a, institution))
       .filter((a): a is Account => a !== null);
   } catch (err) {
     console.error("Plaid accounts fetch failed:", err);
@@ -123,29 +125,16 @@ export interface TransactionsResult {
   degraded: boolean;
 }
 
-export async function getPlaidTransactions(
+/** One incremental sync round for a single item (bank). Never throws — sync
+ *  trouble just means the store serves what it already has. */
+async function syncOneItem(
+  client: PlaidApi,
   userId: string,
-  token: string | null,
-): Promise<TransactionsResult> {
-  const client = getPlaidClient();
-  if (!token || !client) return { transactions: [], degraded: false };
-
-  // Without postgres (local dev): fresh live fetch each request, as before.
-  if (!txnStoreEnabled()) {
-    try {
-      const { added } = await syncFromPlaid(client, token, null, 5);
-      return { transactions: added.map(toTransaction), degraded: false };
-    } catch (err) {
-      console.error("Plaid transactions fetch failed:", err);
-      return { transactions: [], degraded: true };
-    }
-  }
-
-  // Persistent path: pull only the delta since the stored cursor, apply it
-  // atomically, then serve from the store. History accumulates beyond Plaid's
-  // ~90-day default, so weekly/monthly/yearly reports stay complete.
+  itemId: string,
+  token: string,
+): Promise<void> {
   try {
-    const cursor = await readSyncCursor(userId);
+    const cursor = await readSyncCursor(userId, itemId);
     // 500 pages × 500 txns is far beyond any personal account — purely a
     // runaway guard. An incomplete walk is never persisted (cursor contract).
     const delta = await syncFromPlaid(client, token, cursor, 500);
@@ -162,6 +151,7 @@ export async function getPlaidTransactions(
       for (const t of delta.modified) byId.set(t.transaction_id, t);
       const applied = await applySyncDelta(
         userId,
+        itemId,
         [...byId.values()].map(toTransaction),
         delta.removed,
         delta.cursor,
@@ -172,21 +162,60 @@ export async function getPlaidTransactions(
       }
     }
   } catch (err) {
-    // Sync trouble (Plaid or DB) → serve what we already have; next request retries.
     console.error("Plaid incremental sync failed; serving stored data:", err);
+  }
+}
+
+/** Live (storeless) fetch for one item — local dev and fallback path. */
+async function liveFetch(
+  client: PlaidApi,
+  token: string,
+): Promise<{ transactions: Transaction[]; failed: boolean }> {
+  try {
+    const { added } = await syncFromPlaid(client, token, null, 5);
+    return { transactions: added.map(toTransaction), failed: false };
+  } catch (err) {
+    console.error("Plaid transactions fetch failed:", err);
+    return { transactions: [], failed: true };
+  }
+}
+
+/** Transactions across ALL of a user's linked banks. Each item syncs its own
+ *  cursor into the shared per-user store, which is then read ONCE — so multi-
+ *  bank never double-counts a row. */
+export async function getPlaidTransactions(
+  userId: string,
+  items: { itemId: string; accessToken: string }[],
+): Promise<TransactionsResult> {
+  const client = getPlaidClient();
+  if (items.length === 0 || !client) return { transactions: [], degraded: false };
+
+  // Without postgres (local dev): fresh live fetch per item, merged.
+  if (!txnStoreEnabled()) {
+    const results = await Promise.all(
+      items.map((i) => liveFetch(client, i.accessToken)),
+    );
+    return {
+      transactions: results.flatMap((r) => r.transactions),
+      degraded: results.some((r) => r.failed),
+    };
+  }
+
+  // Persistent path: pull only each item's delta since its stored cursor,
+  // apply atomically, then serve from the store. History accumulates beyond
+  // Plaid's ~90-day default, so weekly/monthly/yearly reports stay complete.
+  for (const item of items) {
+    await syncOneItem(client, userId, item.itemId, item.accessToken);
   }
 
   try {
     return { transactions: await readStoredTransactions(userId), degraded: false };
   } catch (err) {
     console.error("Transaction store read failed; falling back to live fetch:", err);
-    try {
-      const { added } = await syncFromPlaid(client, token, null, 5);
-      return { transactions: added.map(toTransaction), degraded: true };
-    } catch (err2) {
-      console.error("Plaid transactions fetch failed:", err2);
-      return { transactions: [], degraded: true };
-    }
+    const results = await Promise.all(
+      items.map((i) => liveFetch(client, i.accessToken)),
+    );
+    return { transactions: results.flatMap((r) => r.transactions), degraded: true };
   }
 }
 
