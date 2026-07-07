@@ -63,3 +63,14 @@ export async function currentUserId(): Promise<string | null> {
 export function unauthorized(): Response {
   return Response.json({ error: "Unauthorized" }, { status: 401 });
 }
+
+/** Operator access: true only when ADMIN_EMAIL is set and matches the
+ *  signed-in account's email. Every admin page/route re-checks this on the
+ *  server — there is no client-side-only gating. Unset → no admin exists. */
+export async function isAdmin(): Promise<boolean> {
+  const adminEmail = (process.env.ADMIN_EMAIL ?? "").trim().toLowerCase();
+  if (!adminEmail) return false;
+  const session = await auth();
+  const email = session?.user?.email?.toLowerCase() ?? "";
+  return Boolean(email && email === adminEmail);
+}

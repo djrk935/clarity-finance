@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { NavBar } from "@/components/dashboard/NavBar";
-import { currentUserId } from "@/lib/auth";
+import { currentUserId, isAdmin } from "@/lib/auth";
 import { AuthGate } from "@/components/auth/AuthGate";
 import { PwaRegister } from "@/components/pwa/PwaRegister";
 
@@ -44,6 +44,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const authed = Boolean(await currentUserId());
+  const admin = authed && (await isAdmin());
   return (
     <html
       lang="en"
@@ -53,7 +54,7 @@ export default async function RootLayout({
         <PwaRegister />
         {authed ? (
           <div className="wrap">
-            <NavBar />
+            <NavBar admin={admin} />
             <main>{children}</main>
           </div>
         ) : (

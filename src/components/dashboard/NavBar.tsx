@@ -8,6 +8,7 @@ import {
   LogOut,
   Receipt,
   PieChart,
+  ShieldCheck,
   Wallet,
   TrendingDown,
   Sparkles,
@@ -24,7 +25,7 @@ const NAV = [
   { href: "/advisor", label: "Advisor", Icon: Sparkles },
 ];
 
-export function NavBar() {
+export function NavBar({ admin = false }: { admin?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -62,6 +63,16 @@ export function NavBar() {
             </Link>
           );
         })}
+        {admin && (
+          <Link
+            href="/admin"
+            className={pathname.startsWith("/admin") ? "nchip on" : "nchip"}
+            aria-current={pathname.startsWith("/admin") ? "page" : undefined}
+          >
+            <ShieldCheck className="ic" size={15} aria-hidden />
+            Admin
+          </Link>
+        )}
       </nav>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <Link

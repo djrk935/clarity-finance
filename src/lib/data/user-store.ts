@@ -210,3 +210,32 @@ export async function listUserIds(limit = 10_000): Promise<string[]> {
   }
   return (await fileReadAll()).slice(0, limit).map((u) => u.id);
 }
+
+export interface UserSummary extends PublicUser {
+  createdAt: string;
+}
+
+/** Account roster for the admin page (no password hashes, oldest first). */
+export async function listUsers(limit = 1_000): Promise<UserSummary[]> {
+  if (isPostgres) {
+    await pgEnsure();
+    const res = await pool().query<{
+      id: string;
+      email: string;
+      name: string;
+      created_at: Date;
+    }>(
+      "SELECT id, email, name, created_at FROM users ORDER BY created_at ASC LIMIT $1",
+      [limit],
+    );
+    return res.rows.map((r) => ({
+      id: r.id,
+      email: r.email,
+      name: r.name,
+      createdAt: r.created_at.toISOString(),
+    }));
+  }
+  return (await fileReadAll())
+    .slice(0, limit)
+    .map(({ id, email, name, createdAt }) => ({ id, email, name, createdAt }));
+}
