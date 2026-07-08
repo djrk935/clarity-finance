@@ -58,6 +58,13 @@ async function pgEnsure(): Promise<void> {
        PRIMARY KEY (user_id, key)
      )`,
   );
+  // Single-user-era table (PRIMARY KEY on key alone): add the user column so
+  // reads don't fail. Marking still works per (user_id, key) upsert on fresh
+  // tables; on a legacy table a cross-user key collision is rejected by the
+  // old PK and simply retries — alerts are opt-in and best-effort by design.
+  await pool().query(
+    `ALTER TABLE alert_log ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT ''`,
+  );
 }
 
 async function pgRead(userId: string): Promise<string[]> {

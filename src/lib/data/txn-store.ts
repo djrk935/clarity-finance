@@ -35,7 +35,12 @@ async function ensureTables(): Promise<void> {
        transfer BOOLEAN NOT NULL DEFAULT FALSE
      )`,
   );
-  // Older beta tables predate multi-bank — add the column in place.
+  // Tables created by the single-user app (or an older beta) predate the
+  // user/item columns — add them in place. Legacy rows keep '' and are simply
+  // invisible to every account (archived in place, never mixed in).
+  await pool().query(
+    `ALTER TABLE plaid_transactions ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT ''`,
+  );
   await pool().query(
     `ALTER TABLE plaid_transactions ADD COLUMN IF NOT EXISTS item_id TEXT NOT NULL DEFAULT ''`,
   );

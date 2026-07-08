@@ -79,9 +79,23 @@ async function pgEnsure(): Promise<void> {
        captured_at DATE NOT NULL,
        liquidity DOUBLE PRECISION NOT NULL,
        debt DOUBLE PRECISION NOT NULL,
-       net DOUBLE PRECISION NOT NULL,
-       UNIQUE (user_id, captured_at)
+       net DOUBLE PRECISION NOT NULL
      )`,
+  );
+  // Single-user-era tables: add the user column (legacy rows keep '' and stay
+  // out of every account) and swap the one-snapshot-per-day-GLOBAL uniqueness
+  // for per-user — otherwise the second user's snapshot each day would fail.
+  await pool().query(
+    `ALTER TABLE net_worth_snapshot ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT ''`,
+  );
+  await pool().query(
+    `ALTER TABLE net_worth_snapshot DROP CONSTRAINT IF EXISTS net_worth_snapshot_captured_at_key`,
+  );
+  // Named unique index (not a table constraint) so fresh and migrated
+  // databases converge on the same shape; ON CONFLICT matches it by columns.
+  await pool().query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS net_worth_user_day
+       ON net_worth_snapshot (user_id, captured_at)`,
   );
 }
 
