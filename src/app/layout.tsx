@@ -24,7 +24,7 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Clarity — Financial rescue, in focus",
+  title: "Clarity Finance",
   description:
     "A calm, honest view of your money and the plan to get back to solid ground.",
   appleWebApp: {
